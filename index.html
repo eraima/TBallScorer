@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#123c35">
+  <title>T-ball Scorebook</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand-mark" aria-hidden="true">TB</div>
+    <div>
+      <p class="eyebrow">GAME DAY TOOL</p>
+      <h1>T-ball Scorebook</h1>
+    </div>
+    <div class="save-state" id="save-state" role="status">Ready to set up</div>
+  </header>
+
+  <main>
+    <section class="panel setup-panel" aria-labelledby="setup-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">BEFORE THE FIRST PITCH</p>
+          <h2 id="setup-title">Set up your game</h2>
+        </div>
+        <button class="button button-quiet" type="button" id="toggle-setup" aria-expanded="true">Hide setup</button>
+      </div>
+      <div id="setup-content">
+        <div class="game-settings">
+          <label class="field">
+            <span>Date</span>
+            <input id="game-date" type="date">
+          </label>
+          <label class="field">
+            <span>Ground / group <span class="optional">(optional)</span></span>
+            <input id="game-ground" type="text" maxlength="60" placeholder="Ground or group">
+          </label>
+          <label class="field">
+            <span>Game name <span class="optional">(optional)</span></span>
+            <input id="game-name" type="text" maxlength="60" placeholder="Saturday morning game">
+          </label>
+          <label class="field">
+            <span>Innings</span>
+            <input id="innings-count" type="number" min="1" max="12" value="4">
+          </label>
+          <label class="field">
+            <span>End each inning</span>
+            <select id="inning-rule">
+              <option value="three-outs">After 3 outs</option>
+              <option value="all-batters">After everyone bats</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="team-setup-grid">
+          <article class="team-setup-card">
+            <div class="team-title-row">
+              <label class="field team-name-field">
+                <span>Home team</span>
+                <input id="home-name" type="text" maxlength="40" value="Home Team">
+              </label>
+            </div>
+            <label class="field">
+              <span>Batting lineup <span class="helper">— one player per line, in order</span></span>
+              <textarea id="home-lineup" rows="6" placeholder="Add player names, one per line"></textarea>
+            </label>
+          </article>
+          <article class="team-setup-card away-card">
+            <div class="team-title-row">
+              <label class="field team-name-field">
+                <span>Away team</span>
+                <input id="away-name" type="text" maxlength="40" value="Away Team">
+              </label>
+            </div>
+            <label class="field">
+              <span>Batting lineup <span class="helper">— one player per line, in order</span></span>
+              <textarea id="away-lineup" rows="6" placeholder="Add player names, one per line"></textarea>
+            </label>
+          </article>
+        </div>
+        <div class="setup-actions">
+          <p class="helper">Your game is saved automatically on this device.</p>
+          <button class="button button-primary" id="start-game" type="button">Save game setup</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="game-area" class="game-area" hidden>
+      <div class="scoreboard panel">
+        <div class="scoreboard-heading">
+          <div>
+            <p class="eyebrow">ON THE SCOREBOARD</p>
+            <h2 id="scoreboard-title">Game score</h2>
+          </div>
+          <div class="export-actions">
+            <button class="button button-quiet" id="view-scorecard" type="button">View scorecard</button>
+            <button class="button button-quiet" id="export-json" type="button">Export JSON</button>
+            <button class="button button-primary" id="export-image" type="button">Download scorecard (JPG)</button>
+          </div>
+        </div>
+        <div class="scoreboard-teams" id="scoreboard-teams"></div>
+      </div>
+
+      <div class="game-controls panel">
+        <label class="field">
+          <span>Batting team</span>
+          <select id="batting-team"></select>
+        </label>
+        <label class="field">
+          <span>Inning</span>
+          <select id="inning-select"></select>
+        </label>
+        <div class="inning-summary" id="inning-summary" aria-live="polite"></div>
+      </div>
+
+      <div id="inning-alert" class="inning-alert" role="status" aria-live="polite" hidden></div>
+
+      <div class="scoring-layout">
+        <section class="panel lineup-panel" aria-labelledby="lineup-title">
+          <div class="section-heading compact-heading">
+            <div>
+              <p class="eyebrow">BATTING ORDER</p>
+              <h2 id="lineup-title">Players</h2>
+            </div>
+            <span class="badge" id="next-batter-badge"></span>
+          </div>
+          <p class="interaction-hint">Tap an occupied base to select that runner, then choose a destination or OUT. Empty bases can start the next batter.</p>
+          <ol id="lineup-list" class="lineup-list"></ol>
+        </section>
+
+        <section class="panel diamond-panel" aria-labelledby="diamond-title">
+          <div class="section-heading compact-heading">
+            <div>
+              <p class="eyebrow">RECORD THE PLAY</p>
+              <h2 id="diamond-title">Move the runners</h2>
+            </div>
+            <span class="selected-player" id="selected-player">Select the next batter</span>
+          </div>
+          <div class="diamond-wrap">
+            <div class="diamond" id="diamond" aria-label="Baseball diamond">
+              <div class="diamond-dirt" aria-hidden="true"></div>
+              <button class="base base-second" type="button" data-base="2" aria-label="Second base">
+                <span class="base-label">2ND</span><span class="base-occupant"></span>
+              </button>
+              <button class="base base-third" type="button" data-base="3" aria-label="Third base">
+                <span class="base-label">3RD</span><span class="base-occupant"></span>
+              </button>
+              <button class="base base-first" type="button" data-base="1" aria-label="First base">
+                <span class="base-label">1ST</span><span class="base-occupant"></span>
+              </button>
+              <button class="base base-home" type="button" data-base="4" aria-label="Home, score a run">
+                <span class="base-label">HOME</span><span class="base-occupant"></span>
+              </button>
+              <button class="base base-out" id="diamond-out" type="button" aria-label="Record the selected player as out">
+                <span class="base-label">OUT</span>
+              </button>
+            </div>
+          </div>
+          <p class="base-occupancy" id="base-occupancy" aria-live="polite"></p>
+          <div class="player-move-options" id="player-move-options" aria-label="Move selected player" hidden></div>
+          <p class="scoring-message" id="scoring-message" role="alert" aria-live="assertive" hidden></p>
+          <div class="diamond-footer">
+            <p>Choose any base ahead of the selected runner. Runners advance in order; tap OUT on the diamond to record an out.</p>
+            <div class="scoring-actions">
+              <button class="button button-quiet" id="undo-last-action" type="button">← Undo</button>
+              <button class="button button-quiet" id="redo-action" type="button">Redo →</button>
+              <button class="button button-out" id="record-out" type="button">Record out</button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section class="panel inning-card" aria-labelledby="inning-card-title">
+        <div class="section-heading compact-heading">
+          <div>
+            <p class="eyebrow">DOT METHOD</p>
+            <h2 id="inning-card-title">Inning scorecard</h2>
+          </div>
+          <span class="helper" id="scorecard-team-label"></span>
+        </div>
+        <div class="scorecard-table-wrap">
+          <table class="scorecard-table">
+            <thead><tr><th scope="col">#</th><th scope="col">Batter</th><th scope="col">Progress</th><th scope="col">Result</th></tr></thead>
+            <tbody id="inning-scorecard"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
+  <dialog class="scorecard-preview" id="scorecard-preview" aria-labelledby="scorecard-preview-title">
+    <div class="scorecard-preview-heading">
+      <div>
+        <p class="eyebrow">REFERENCE VIEW</p>
+        <h2 id="scorecard-preview-title">Scorecard preview</h2>
+      </div>
+      <button class="button button-quiet" id="close-scorecard-preview" type="button">Close</button>
+    </div>
+    <p class="helper scorecard-preview-hint">This is the same layout used for the downloaded scorecard. Scroll horizontally to see both teams and all innings.</p>
+    <div class="scorecard-preview-scroll" id="scorecard-preview-content"></div>
+  </dialog>
+  <footer class="page-footer">
+    <span>Simple scoring for a great game.</span>
+    <span>Game data stays in this browser until you clear it.</span>
+  </footer>
+</body>
+</html>
