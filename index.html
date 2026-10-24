@@ -126,7 +126,7 @@
             </div>
             <span class="badge" id="next-batter-badge"></span>
           </div>
-          <p class="interaction-hint">Tap an occupied base to select that runner, then choose a destination or OUT. Empty bases can start the next batter.</p>
+          <p class="interaction-hint">Select an occupied player on the diamond or choose the next player below home, then choose a move or OUT.</p>
           <ol id="lineup-list" class="lineup-list"></ol>
         </section>
 
@@ -141,28 +141,29 @@
           <div class="diamond-wrap">
             <div class="diamond" id="diamond" aria-label="Baseball diamond">
               <div class="diamond-dirt" aria-hidden="true"></div>
-              <button class="base base-second" type="button" data-base="2" aria-label="Second base">
-                <span class="base-label">2ND</span><span class="base-occupant"></span>
-              </button>
-              <button class="base base-third" type="button" data-base="3" aria-label="Third base">
-                <span class="base-label">3RD</span><span class="base-occupant"></span>
-              </button>
-              <button class="base base-first" type="button" data-base="1" aria-label="First base">
-                <span class="base-label">1ST</span><span class="base-occupant"></span>
-              </button>
-              <button class="base base-home" type="button" data-base="4" aria-label="Home, score a run">
-                <span class="base-label">HOME</span><span class="base-occupant"></span>
-              </button>
+              <div class="base base-second" data-base="2" aria-label="Second base">
+                <span class="base-label">2ND</span><button class="base-occupant" type="button" disabled></button>
+              </div>
+              <div class="base base-third" data-base="3" aria-label="Third base">
+                <span class="base-label">3RD</span><button class="base-occupant" type="button" disabled></button>
+              </div>
+              <div class="base base-first" data-base="1" aria-label="First base">
+                <span class="base-label">1ST</span><button class="base-occupant" type="button" disabled></button>
+              </div>
+              <div class="base base-home" data-base="4" aria-label="Home, score a run">
+                <span class="base-label">HOME</span><button class="base-occupant" type="button" disabled></button>
+              </div>
               <button class="base base-out" id="diamond-out" type="button" aria-label="Record the selected player as out">
                 <span class="base-label">OUT</span>
               </button>
             </div>
+            <button class="button button-quiet diamond-next-player" id="diamond-next-player" type="button"></button>
           </div>
           <p class="base-occupancy" id="base-occupancy" aria-live="polite"></p>
           <div class="player-move-options" id="player-move-options" aria-label="Move selected player" hidden></div>
           <p class="scoring-message" id="scoring-message" role="alert" aria-live="assertive" hidden></p>
           <div class="diamond-footer">
-            <p>Choose any base ahead of the selected runner. Runners advance in order; tap OUT on the diamond to record an out.</p>
+            <p>Choose a move for the selected player. Runners advance in order; tap OUT on the diamond to record an out.</p>
             <div class="scoring-actions">
               <button class="button button-quiet" id="undo-last-action" type="button">← Undo</button>
               <button class="button button-quiet" id="redo-action" type="button">Redo →</button>

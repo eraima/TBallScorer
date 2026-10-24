@@ -496,7 +496,6 @@ function renderLineup(team, inning) {
     if (selectedPlayerId === player.id) li.classList.add("selected");
     if (atBat?.status === "onBase") li.classList.add("on-base");
     if (atBat && atBat.status !== "onBase") li.classList.add("played");
-    li.draggable = !isHalfComplete(team, inning) && (atBat?.status === "onBase" || (!atBat && player.id === batter?.id));
     li.dataset.playerId = player.id;
     li.setAttribute("role", "button");
     li.setAttribute("tabindex", "0");
@@ -507,15 +506,6 @@ function renderLineup(team, inning) {
         event.preventDefault();
         selectPlayer(player.id);
       }
-    });
-    li.addEventListener("dragstart", event => {
-      if (!li.draggable) {
-        event.preventDefault();
-        return;
-      }
-      selectedPlayerId = player.id;
-      event.dataTransfer.setData("text/plain", player.id);
-      event.dataTransfer.effectAllowed = "move";
     });
     const order = document.createElement("span");
     order.className = "player-number";
@@ -550,12 +540,13 @@ function selectPlayer(playerId) {
     return;
   }
   selectedPlayerId = selectedPlayerId === playerId ? null : playerId;
-  showScoringMessage(selectedPlayerId ? `Selected ${player.name}. Tap a destination base or OUT on the diamond.` : "");
+  showScoringMessage(selectedPlayerId ? `Selected ${player.name}. Choose a move below the diamond or OUT.` : "");
   renderScoring();
 }
 
 function renderDiamond(team, inning) {
   const occupied = getOccupied(team, inning);
+  const batter = nextBatter(team, getHalf(team, inning));
   const occupiedBases = [...occupied.entries()]
     .sort(([baseA], [baseB]) => baseA - baseB)
     .map(([base, playerId]) => `${BASE_NAMES[base]}: ${getPlayer(team, playerId)?.name ?? "Unknown player"}`);
@@ -568,10 +559,17 @@ function renderDiamond(team, inning) {
     const player = playerId ? getPlayer(team, playerId) : null;
     const occupant = baseButton.querySelector(".base-occupant");
     occupant.textContent = player?.name ?? "";
+    occupant.disabled = !player;
+    occupant.setAttribute("aria-label", player ? `Select ${player.name} on ${BASE_NAMES[base]} base` : "");
     baseButton.classList.toggle("has-player", Boolean(player));
-    baseButton.draggable = Boolean(player && !isHalfComplete(team, inning));
-    baseButton.setAttribute("aria-label", player ? `${BASE_NAMES[base]} base, ${player.name}` : BASE_NAMES[base] === "Home" ? "Home, score a run" : `${BASE_NAMES[base]} base`);
+    baseButton.setAttribute("aria-label", player ? `${BASE_NAMES[base]} base, ${player.name}` : `${BASE_NAMES[base]} base`);
   }
+  const nextPlayerButton = document.getElementById("diamond-next-player");
+  nextPlayerButton.textContent = batter ? `Next up: ${batter.name}` : "No next player";
+  nextPlayerButton.disabled = !batter || isHalfComplete(team, inning);
+  nextPlayerButton.onclick = () => {
+    if (batter) selectPlayer(batter.id);
+  };
   els.selectedPlayer.textContent = selectedPlayerId ? `Selected: ${getPlayer(team, selectedPlayerId)?.name ?? "player"}` : `Next: ${nextBatter(team)?.name ?? "lineup complete"}`;
   renderPlayerMoveOptions(team, inning);
 }
@@ -1015,48 +1013,12 @@ function bindEvents() {
   els.exportJson.addEventListener("click", exportJson);
   els.exportImage.addEventListener("click", exportImage);
   for (const base of els.diamond.querySelectorAll(".base[data-base]")) {
-    base.addEventListener("click", () => {
+    base.addEventListener("click", event => {
+      if (!event.target.closest(".base-occupant")) return;
       const team = currentTeam();
       const inning = currentInning();
       const occupiedId = getOccupied(team, inning).get(Number(base.dataset.base));
-      if (occupiedId && !selectedPlayerId) {
-        selectPlayer(occupiedId);
-        return;
-      }
-      if (occupiedId && selectedPlayerId === occupiedId) {
-        selectedPlayerId = null;
-        showScoringMessage("");
-        renderScoring();
-        return;
-      }
-      const playerId = selectedPlayerId || nextBatter(team)?.id;
-      if (!playerId) {
-        showScoringMessage(lineupLimitMessage(team));
-        return;
-      }
-      recordBase(playerId, Number(base.dataset.base));
-    });
-    base.addEventListener("dragstart", event => {
-      const playerId = getOccupied(currentTeam(), currentInning()).get(Number(base.dataset.base));
-      if (!playerId || isHalfComplete(currentTeam(), currentInning())) {
-        event.preventDefault();
-        return;
-      }
-      selectedPlayerId = playerId;
-      event.dataTransfer.setData("text/plain", playerId);
-      event.dataTransfer.effectAllowed = "move";
-    });
-    base.addEventListener("dragend", () => renderScoring());
-    base.addEventListener("dragover", event => {
-      event.preventDefault();
-      base.classList.add("drag-over");
-    });
-    base.addEventListener("dragleave", () => base.classList.remove("drag-over"));
-    base.addEventListener("drop", event => {
-      event.preventDefault();
-      base.classList.remove("drag-over");
-      const playerId = event.dataTransfer.getData("text/plain") || selectedPlayerId;
-      if (playerId) recordBase(playerId, Number(base.dataset.base));
+      if (occupiedId) selectPlayer(occupiedId);
     });
   }
   els.diamondOut.addEventListener("dragover", event => {
