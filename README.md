@@ -30,10 +30,14 @@ Replace the `src` with the public URL of the hosted app and adjust the iframe he
 ## Scoring notes
 
 - The inning-ending rule is selected when setting up the game: three outs (default) or everyone in the lineup bats.
-- Batting order continues from inning to inning. Occupied bases show each runner's name; tapping an occupied base selects that runner. Move options include every base ahead of their current position, and runners advance automatically in order so no runner is overtaken. A confirmation is requested before any runner is scored.
-- Players can be selected and moved, or recorded out, from the diamond without using the lineup list. Selecting a player also opens direct move options. Scoring-rule errors and inning-limit messages appear beside the diamond.
+- Batting order continues from inning to inning. Occupied bases show each runner's name; tapping an occupied base selects that runner. Move options include every base ahead of their current position, and runners advance automatically in order so no runner is overtaken.
+- Players can be selected and moved, or recorded out, from the diamond without using the lineup list. Selecting a player also opens direct move options. A confirmation is requested only when another move automatically advances a runner home; directly moving a player home does not prompt. Scoring-rule errors and inning-limit messages appear beside the diamond.
 - **Undo** and **Redo** navigate the saved scoring history one action at a time to review or correct a play.
 - The inning summary warns when the selected rule's limit is reached and also reports when all players have batted or three outs have been recorded.
 - A new setup replaces the locally saved game after confirmation. Export the JSON first if you want to retain the previous game.
-- The JPEG scorecard follows the supplied scorecard layout: visiting and home teams side by side, ordered batter names, a field-position column, 12 inning columns with DOT-method diamonds, plus inning and running totals. Date and ground/group details can be entered in game setup.
+- The JPEG scorecard follows the supplied scorecard layout: visiting and home teams side by side, named team headers, ordered batter names, a field-position column, 12 inning columns with DOT-method diamonds, plus each inning's runs in the upper total segment and the running game total in the lower segment. Date and ground/group details can be entered in game setup.
 - Choose **View scorecard** at any time to open an on-screen reference in the same layout as the downloaded JPEG.
+
+## Tests
+
+Run the scoring behavior tests with `node --test tests/scoring.test.js`. The cases cover direct scoring without confirmation, confirmation when another move automatically scores a runner, and out recording from the remaining controls.

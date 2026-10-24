@@ -32,7 +32,6 @@ const els = {
   baseOccupancy: document.querySelector("#base-occupancy"),
   playerMoveOptions: document.querySelector("#player-move-options"),
   scoringMessage: document.querySelector("#scoring-message"),
-  recordOut: document.querySelector("#record-out"),
   undoLastAction: document.querySelector("#undo-last-action"),
   redoAction: document.querySelector("#redo-action"),
   scorecardTeamLabel: document.querySelector("#scorecard-team-label"),
@@ -268,8 +267,7 @@ function recordBase(playerId, destination) {
     if (destination === 4) {
       const occupied = getOccupied(team, inning);
       const scoringNames = [...occupied.values()].map(runnerId => getPlayer(team, runnerId)?.name).filter(Boolean);
-      scoringNames.push(batter.name);
-      if (!window.confirm(`Confirm that ${scoringNames.join(", ")} reached home?`)) return;
+      if (scoringNames.length && !confirmScorers(scoringNames)) return;
       saveUndoPoint();
       for (const runnerId of occupied.values()) {
         const runner = getAtBat(team, inning, runnerId);
@@ -304,7 +302,6 @@ function recordBase(playerId, destination) {
       return;
     }
     if (destination === 4) {
-      if (!confirmScorers([batter.name])) return;
       saveUndoPoint();
       for (let base = atBat.base + 1; base <= 4; base += 1) atBat.path.push(base);
       atBat.status = "run";
@@ -717,8 +714,6 @@ function renderScoring() {
   renderDiamond(team, inning);
   renderInningSummary(team, inning);
   renderInningScorecard(team, inning);
-  els.recordOut.disabled = isHalfComplete(team, inning);
-  els.recordOut.title = els.recordOut.disabled ? "This inning is complete" : "Record the selected player as out";
   els.diamondOut.disabled = isHalfComplete(team, inning);
   els.diamondOut.title = els.diamondOut.disabled ? inningCompletionMessage(team, getHalf(team, inning)) : "Record the selected player, or next batter, as out";
   els.undoLastAction.disabled = !game.undoHistory?.length;
@@ -840,8 +835,13 @@ function drawTeamScorecard(ctx, team, x, y, panelWidth, rowHeight, inningWidth, 
   ctx.fillStyle = "#111";
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
+  const teamRole = team.id === "home" ? "HOME TEAM" : "VISITING TEAM";
+  const heading = `${teamRole} — ${team.name.toUpperCase()}`;
   ctx.font = "bold 22px sans-serif";
-  ctx.fillText(team.name.toUpperCase(), x + 12, y + 19);
+  while (ctx.measureText(heading).width > panelWidth - 24 && Number.parseInt(ctx.font, 10) > 14) {
+    ctx.font = `bold ${Number.parseInt(ctx.font, 10) - 1}px sans-serif`;
+  }
+  ctx.fillText(heading, x + 12, y + 17, panelWidth - 24);
   ctx.font = "bold 12px sans-serif";
   ctx.textAlign = "center";
   ctx.fillText("BAT", x + numberWidth / 2, y + 49);
@@ -853,17 +853,19 @@ function drawTeamScorecard(ctx, team, x, y, panelWidth, rowHeight, inningWidth, 
   }
 
   ctx.beginPath();
+  ctx.moveTo(x, y + 33);
+  ctx.lineTo(x + panelWidth, y + 33);
   ctx.moveTo(x, y + headerHeight);
   ctx.lineTo(x + panelWidth, y + headerHeight);
-  ctx.moveTo(x + numberWidth, y);
+  ctx.moveTo(x + numberWidth, y + 33);
   ctx.lineTo(x + numberWidth, y + headerHeight + maxRows * rowHeight);
-  ctx.moveTo(x + numberWidth + nameWidth, y);
+  ctx.moveTo(x + numberWidth + nameWidth, y + 33);
   ctx.lineTo(x + numberWidth + nameWidth, y + headerHeight + maxRows * rowHeight);
-  ctx.moveTo(inningsX, y);
+  ctx.moveTo(inningsX, y + 33);
   ctx.lineTo(inningsX, y + headerHeight + maxRows * rowHeight);
   for (let inning = 1; inning < 12; inning += 1) {
     const dividerX = inningsX + inning * inningWidth;
-    ctx.moveTo(dividerX, y);
+    ctx.moveTo(dividerX, y + 33);
     ctx.lineTo(dividerX, y + headerHeight + maxRows * rowHeight);
   }
   ctx.stroke();
@@ -915,8 +917,8 @@ function drawTeamScorecard(ctx, team, x, y, panelWidth, rowHeight, inningWidth, 
     const inningRuns = team.innings?.[inning]?.runs ?? 0;
     runningTotal += inningRuns;
     ctx.font = "bold 14px sans-serif";
-    ctx.fillText(String(inningRuns), cellX + inningWidth * .72, totalsY + rowHeight * .3);
-    ctx.fillText(String(runningTotal), cellX + inningWidth * .28, totalsY + rowHeight * .73);
+    ctx.fillText(String(inningRuns), cellX + inningWidth * .27, totalsY + rowHeight * .27);
+    ctx.fillText(String(runningTotal), cellX + inningWidth * .73, totalsY + rowHeight * .73);
   }
   ctx.textAlign = "left";
 }
@@ -1006,7 +1008,6 @@ function bindEvents() {
     renderScoring();
   });
   els.diamondOut.addEventListener("click", () => recordOut());
-  els.recordOut.addEventListener("click", recordOut);
   els.undoLastAction.addEventListener("click", undoLastAction);
   els.redoAction.addEventListener("click", redoAction);
   els.viewScorecard.addEventListener("click", showScorecardPreview);
