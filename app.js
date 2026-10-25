@@ -259,7 +259,8 @@ function getInningStarter(team, inning) {
 
 function getInningCrossoverPlayer(team, inning) {
   if (!inningHasEnded(team, inning)) return null;
-  return getInningStarter(team, inning + 1);
+  const starterId = getInningStarter(team, inning + 1);
+  return starterId && !getAtBat(team, inning, starterId) ? starterId : null;
 }
 
 function isHalfComplete(team, inning) {
@@ -1364,9 +1365,6 @@ function bindEvents() {
   });
   window.addEventListener?.("resize", () => {
     if (!game) return;
-    const mobile = isMobileLayout();
-    setupCollapsed = mobile;
-    lineupCollapsed = mobile;
     render();
   });
   window.addEventListener?.("keydown", event => {

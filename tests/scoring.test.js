@@ -164,6 +164,7 @@ function startApp(savedGame = createGame(), mobile = false) {
     },
     body: new FakeElement("body")
   };
+  const windowListeners = new Map();
   const context = {
     document,
     localStorage: {
@@ -180,6 +181,11 @@ function startApp(savedGame = createGame(), mobile = false) {
       },
       matchMedia() {
         return { matches: mobile };
+      },
+      addEventListener(type, listener) {
+        const listeners = windowListeners.get(type) || [];
+        listeners.push(listener);
+        windowListeners.set(type, listeners);
       },
       setTimeout
     },
@@ -223,7 +229,12 @@ function startApp(savedGame = createGame(), mobile = false) {
     return JSON.parse(storage.get("tball-scorebook-game-v1"));
   }
 
-  return { elements, infoButton, confirmations, alerts, clickBase, moveNextBatterTo, selectPlayer, chooseMove, setInning, currentGame };
+  function resizeTo(nextMobile) {
+    mobile = nextMobile;
+    for (const listener of windowListeners.get("resize") || []) listener();
+  }
+
+  return { elements, infoButton, confirmations, alerts, clickBase, moveNextBatterTo, selectPlayer, chooseMove, setInning, currentGame, resizeTo };
 }
 
 test("moving a batter directly home records a run without confirmation", () => {
@@ -393,6 +404,62 @@ test("inning transitions cross the next batter's previous cell and mark their ne
   ])));
 });
 
+test("inning crossover does not cross a player who already has a play in the previous inning", () => {
+  const game = createGame();
+  for (const team of game.teams) {
+    team.players.push(
+      { id: `${team.id}-4`, name: "Player 4", order: 4 },
+      { id: `${team.id}-5`, name: "Player 5", order: 5 },
+      { id: `${team.id}-6`, name: "Player 6", order: 6 },
+      { id: `${team.id}-7`, name: "Player 7", order: 7 }
+    );
+    team.innings[1] = {
+      outs: 3,
+      runs: 1,
+      complete: false,
+      atBats: team.players.map((player, index) => ({
+        playerId: player.id,
+        path: [],
+        status: index === 0 ? "run" : index >= 4 ? "out" : "onBase",
+        base: index > 0 && index < 4 ? 1 : null,
+        outNumber: index >= 4 ? index - 3 : null
+      }))
+    };
+    team.innings[2] = {
+      outs: 0,
+      runs: 0,
+      complete: false,
+      atBats: [{
+        playerId: `${team.id}-1`,
+        path: [1],
+        advances: [{ from: 4, to: 1 }],
+        status: "onBase",
+        base: 1,
+        outNumber: null
+      }]
+    };
+  }
+  const app = startApp(game);
+  app.setInning(2);
+  const currentInningProgress = app.elements.get("inning-scorecard").children[0].children[2].children[0];
+  assert.ok(currentInningProgress.classList.contains("inning-start"));
+
+  app.elements.get("view-scorecard").click();
+  const canvas = app.elements.get("scorecard-preview-content").children[0];
+  const strokes = canvas.context.strokes.filter(stroke => stroke.lineWidth === 4);
+  const crossedCellTop = 140 + 62;
+  const homeTeamX = 44 + 45 + 205 + 48 + 76 * 12 + 34;
+  const inningOneX = homeTeamX + 45 + 205 + 48;
+  assert.ok(!strokes.some(({ path }) => JSON.stringify(path) === JSON.stringify([
+    [inningOneX, crossedCellTop + 78],
+    [inningOneX + 76, crossedCellTop]
+  ])));
+  assert.ok(strokes.some(({ path }) => JSON.stringify(path) === JSON.stringify([
+    [inningOneX + 76, crossedCellTop],
+    [inningOneX + 152, crossedCellTop]
+  ])));
+});
+
 test("automatic runs show a green notice without confirmation", () => {
   const app = startApp();
   app.moveNextBatterTo(1);
@@ -540,6 +607,26 @@ test("mobile game view starts with setup and batting order collapsed", () => {
   app.elements.get("toggle-lineup").click();
   assert.equal(app.elements.get("setup-content").hidden, false);
   assert.equal(app.elements.get("lineup-content").hidden, false);
+});
+
+test("mobile setup and batting order stay expanded across viewport resizes until hidden", () => {
+  const app = startApp(createGame(), true);
+
+  app.elements.get("toggle-setup").click();
+  app.elements.get("toggle-lineup").click();
+  app.resizeTo(false);
+  app.resizeTo(true);
+
+  assert.equal(app.elements.get("setup-content").hidden, false);
+  assert.equal(app.elements.get("lineup-content").hidden, false);
+
+  app.elements.get("toggle-setup").click();
+  app.elements.get("toggle-lineup").click();
+  app.resizeTo(false);
+  app.resizeTo(true);
+
+  assert.equal(app.elements.get("setup-content").hidden, true);
+  assert.equal(app.elements.get("lineup-content").hidden, true);
 });
 
 test("manual and contextual info buttons work without native dialog support", () => {
