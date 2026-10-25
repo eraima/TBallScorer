@@ -15,6 +15,7 @@
       <p class="eyebrow">GAME DAY TOOL</p>
       <h1>T-ball Scorebook</h1>
     </div>
+    <button class="button button-quiet manual-button" id="open-manual" type="button">User manual</button>
     <div class="save-state" id="save-state" role="status">Ready to set up</div>
   </header>
 
@@ -30,7 +31,7 @@
       <div id="setup-content">
         <div class="game-settings">
           <label class="field">
-            <span>Date</span>
+            <span>Date <button class="info-button" type="button" data-help="Add the game date for the scorecard header." aria-label="More information about game date">i</button></span>
             <input id="game-date" type="date">
           </label>
           <label class="field">
@@ -42,15 +43,16 @@
             <input id="game-name" type="text" maxlength="60" placeholder="Saturday morning game">
           </label>
           <label class="field">
-            <span>Innings</span>
-            <input id="innings-count" type="number" min="1" max="12" value="4">
+            <span>Innings <button class="info-button" type="button" data-help="Choose how many innings this game is scheduled to have. You can select an inning from the game controls while scoring." aria-label="More information about innings">i</button></span>
+            <input id="innings-count" type="number" min="1" max="12" step="1" value="12" required>
           </label>
           <label class="field">
-            <span>End each inning</span>
-            <select id="inning-rule">
-              <option value="three-outs">After 3 outs</option>
-              <option value="all-batters">After everyone bats</option>
-            </select>
+            <span>Hitters per inning <button class="info-button" type="button" data-help="This is a warning threshold for the number of hitters, not a limit that prevents further scoring." aria-label="More information about hitters per inning">i</button></span>
+            <input id="players-per-inning" type="number" min="1" step="1" value="9" required>
+          </label>
+          <label class="field">
+            <span>Outs per inning <button class="info-button" type="button" data-help="When this number of players are out, the inning should end. This shows a warning but does not block scoring." aria-label="More information about outs per inning">i</button></span>
+            <input id="outs-per-inning" type="number" min="1" step="1" value="3" required>
           </label>
         </div>
 
@@ -63,7 +65,7 @@
               </label>
             </div>
             <label class="field">
-              <span>Batting lineup <span class="helper">— one player per line, in order</span></span>
+              <span>Batting lineup <span class="helper">— one player per line, in order</span> <button class="info-button" type="button" data-help="Enter each player's name on a separate line. The order of the lines is the batting order for that team." aria-label="More information about the home batting lineup">i</button></span>
               <textarea id="home-lineup" rows="6" placeholder="Add player names, one per line"></textarea>
             </label>
           </article>
@@ -75,7 +77,7 @@
               </label>
             </div>
             <label class="field">
-              <span>Batting lineup <span class="helper">— one player per line, in order</span></span>
+              <span>Batting lineup <span class="helper">— one player per line, in order</span> <button class="info-button" type="button" data-help="Enter each player's name on a separate line. The order of the lines is the batting order for that team." aria-label="More information about the away batting lineup">i</button></span>
               <textarea id="away-lineup" rows="6" placeholder="Add player names, one per line"></textarea>
             </label>
           </article>
@@ -98,6 +100,7 @@
             <button class="button button-quiet" id="view-scorecard" type="button">View scorecard</button>
             <button class="button button-quiet" id="export-json" type="button">Export JSON</button>
             <button class="button button-primary" id="export-image" type="button">Download scorecard (JPG)</button>
+            <button class="info-button" type="button" data-help="View scorecard opens an on-screen preview. Download scorecard (JPG) saves a shareable image of the full scorecard; Export JSON saves game data for backup, not an image." aria-label="More information about scorecard export">i</button>
           </div>
         </div>
         <div class="scoreboard-teams" id="scoreboard-teams"></div>
@@ -105,11 +108,11 @@
 
       <div class="game-controls panel">
         <label class="field">
-          <span>Batting team</span>
+          <span>Batting team <button class="info-button" type="button" data-help="Choose which team is batting. The batting team controls the active lineup, runners, and inning scorecard." aria-label="More information about batting team">i</button></span>
           <select id="batting-team"></select>
         </label>
         <label class="field">
-          <span>Inning</span>
+          <span>Inning <button class="info-button" type="button" data-help="Choose the inning being scored. The app does not lock earlier innings; select any inning to review or edit its plays." aria-label="More information about inning selection">i</button></span>
           <select id="inning-select"></select>
         </label>
         <div class="inning-summary" id="inning-summary" aria-live="polite"></div>
@@ -126,8 +129,11 @@
             </div>
             <span class="badge" id="next-batter-badge"></span>
           </div>
-          <p class="interaction-hint">Select an occupied player on the diamond or choose the next player below home, then choose a move or OUT.</p>
-          <ol id="lineup-list" class="lineup-list"></ol>
+          <button class="button button-quiet lineup-toggle" id="toggle-lineup" type="button" aria-expanded="true" aria-controls="lineup-content">Hide batting order</button>
+          <div id="lineup-content">
+            <p class="interaction-hint">Select the next player, then choose a base, OUT, or Skip player. Click an occupied base to select its runner. <button class="info-button" type="button" data-help="The batting order shows each player's turn and status. Select the next batter or an on-base runner, then choose where that player stopped." aria-label="More information about the batting order">i</button></p>
+            <ol id="lineup-list" class="lineup-list"></ol>
+          </div>
         </section>
 
         <section class="panel diamond-panel" aria-labelledby="diamond-title">
@@ -135,23 +141,24 @@
             <div>
               <p class="eyebrow">RECORD THE PLAY</p>
               <h2 id="diamond-title">Move the runners</h2>
+              <button class="info-button" type="button" data-help="Select a batter or runner, then choose a destination. The diagram and inning scorecard mark the bases reached; arrows show the endpoint of a multi-base run." aria-label="More information about moving players">i</button>
             </div>
             <span class="selected-player" id="selected-player">Select the next batter</span>
           </div>
           <div class="diamond-wrap">
             <div class="diamond" id="diamond" aria-label="Baseball diamond">
               <div class="diamond-dirt" aria-hidden="true"></div>
-              <div class="base base-second" data-base="2" aria-label="Second base">
-                <span class="base-label">2ND</span><button class="base-occupant" type="button" disabled></button>
+              <div class="base base-second" data-base="2" role="button" tabindex="0" aria-label="Second base">
+                <span class="base-label">2ND</span><span class="base-occupant"></span>
               </div>
-              <div class="base base-third" data-base="3" aria-label="Third base">
-                <span class="base-label">3RD</span><button class="base-occupant" type="button" disabled></button>
+              <div class="base base-third" data-base="3" role="button" tabindex="0" aria-label="Third base">
+                <span class="base-label">3RD</span><span class="base-occupant"></span>
               </div>
-              <div class="base base-first" data-base="1" aria-label="First base">
-                <span class="base-label">1ST</span><button class="base-occupant" type="button" disabled></button>
+              <div class="base base-first" data-base="1" role="button" tabindex="0" aria-label="First base">
+                <span class="base-label">1ST</span><span class="base-occupant"></span>
               </div>
-              <div class="base base-home" data-base="4" aria-label="Home, score a run">
-                <span class="base-label">HOME</span><button class="base-occupant" type="button" disabled></button>
+              <div class="base base-home" data-base="4" role="button" tabindex="0" aria-label="Home, score a run">
+                <span class="base-label">HOME</span><span class="base-occupant"></span>
               </div>
               <button class="base base-out" id="diamond-out" type="button" aria-label="Record the selected player as out">
                 <span class="base-label">OUT</span>
@@ -163,7 +170,7 @@
           <div class="player-move-options" id="player-move-options" aria-label="Move selected player" hidden></div>
           <p class="scoring-message" id="scoring-message" role="alert" aria-live="assertive" hidden></p>
           <div class="diamond-footer">
-            <p>Choose a move for the selected player. Runners advance in order; tap OUT on the diamond to record an out.</p>
+            <p>Choose a move for the selected player. Runners advance in order; tap OUT to record an out or Skip player for an injured player.</p>
             <div class="scoring-actions">
               <button class="button button-quiet" id="undo-last-action" type="button">← Undo</button>
               <button class="button button-quiet" id="redo-action" type="button">Redo →</button>
@@ -182,7 +189,7 @@
         </div>
         <div class="scorecard-table-wrap">
           <table class="scorecard-table">
-            <thead><tr><th scope="col">#</th><th scope="col">Batter</th><th scope="col">Progress</th><th scope="col">Result</th></tr></thead>
+            <thead><tr><th scope="col">#</th><th scope="col">Batter</th><th scope="col">Bases</th><th scope="col">Result</th></tr></thead>
             <tbody id="inning-scorecard"></tbody>
           </table>
         </div>
@@ -199,6 +206,51 @@
     </div>
     <p class="helper scorecard-preview-hint">This is the same layout used for the downloaded scorecard. Scroll horizontally to see both teams and all innings.</p>
     <div class="scorecard-preview-scroll" id="scorecard-preview-content"></div>
+  </dialog>
+  <dialog class="info-dialog" id="info-dialog" aria-labelledby="info-dialog-title">
+    <div class="info-dialog-heading">
+      <h2 id="info-dialog-title"></h2>
+      <button class="button button-quiet" id="close-info-dialog" type="button">Close</button>
+    </div>
+    <p id="info-dialog-message"></p>
+  </dialog>
+  <dialog class="confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-dialog-title">
+    <div class="info-dialog-heading">
+      <h2 id="confirm-dialog-title">Confirm action</h2>
+    </div>
+    <p id="confirm-dialog-message"></p>
+    <div class="confirm-dialog-actions">
+      <button class="button button-quiet" id="cancel-confirm" type="button">No, cancel</button>
+      <button class="button button-primary" id="accept-confirm" type="button">Yes, continue</button>
+    </div>
+  </dialog>
+  <dialog class="manual-dialog" id="user-manual" aria-labelledby="manual-title">
+    <div class="manual-heading">
+      <div>
+        <p class="eyebrow">HELP &amp; INSTRUCTIONS</p>
+        <h2 id="manual-title">T-ball Scorebook user manual</h2>
+      </div>
+      <button class="button button-quiet" id="close-manual" type="button">Close</button>
+    </div>
+    <div class="manual-content">
+      <section>
+        <h3>1. Set up a game</h3>
+        <p>Enter the date and optional ground or game name, choose the innings and hitter warning threshold, then enter both team names and each batting lineup (one player per line, in batting order). Press <strong>Save game setup</strong>. The game is saved in this browser on this device. On a phone, setup and batting order start collapsed after the game is saved; use their show/hide buttons whenever you need them.</p>
+      </section>
+      <section>
+        <h3>2. Move players and record plays</h3>
+        <p>Choose the batting team and inning. Select the next batter using the player list or the <strong>Next up</strong> button, then choose a base on the diamond or one of the move buttons. Select an occupied base to choose its runner. Runners move forward in order automatically when needed. Choose <strong>Out</strong> to record an out, or <strong>Skip player</strong> for a player who will not bat. Use Undo or Redo to step through recent scoring actions.</p>
+        <p>The score notation marks the bases reached. If a player passes more than one base in a move, the visited bases are connected and an arrow points to the base where the player stopped. A home run is shown as four connected base dots.</p>
+      </section>
+      <section>
+        <h3>3. Read the scorecard</h3>
+        <p>The inning scorecard lists each batter, their base-by-base dots, and their result. The scoreboard at the top shows each team's running total. Use <strong>View scorecard</strong> to open the full-game scorecard with both teams, each inning, inning runs, and running totals.</p>
+      </section>
+      <section>
+        <h3>4. Export or share the scorecard</h3>
+        <p><strong>Download scorecard (JPG)</strong> saves an image of the full-game scorecard, which you can print or attach to a message. On a device with image sharing, open the downloaded JPG in Photos or Files and use that app's Share button. <strong>Export JSON</strong> saves a data backup that can be kept or used to restore the game; it is not an image.</p>
+      </section>
+    </div>
   </dialog>
   <footer class="page-footer">
     <span>Simple scoring for a great game.</span>

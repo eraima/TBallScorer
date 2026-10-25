@@ -10,7 +10,8 @@ const els = {
   gameDate: document.querySelector("#game-date"),
   gameGround: document.querySelector("#game-ground"),
   inningsCount: document.querySelector("#innings-count"),
-  inningRule: document.querySelector("#inning-rule"),
+  playersPerInning: document.querySelector("#players-per-inning"),
+  outsPerInning: document.querySelector("#outs-per-inning"),
   homeName: document.querySelector("#home-name"),
   awayName: document.querySelector("#away-name"),
   homeLineup: document.querySelector("#home-lineup"),
@@ -21,6 +22,7 @@ const els = {
   scoreboardTeams: document.querySelector("#scoreboard-teams"),
   battingTeam: document.querySelector("#batting-team"),
   inningSelect: document.querySelector("#inning-select"),
+  diamondNextPlayer: document.querySelector("#diamond-next-player"),
   inningSummary: document.querySelector("#inning-summary"),
   inningAlert: document.querySelector("#inning-alert"),
   lineupTitle: document.querySelector("#lineup-title"),
@@ -41,12 +43,32 @@ const els = {
   scorecardPreviewContent: document.querySelector("#scorecard-preview-content"),
   closeScorecardPreview: document.querySelector("#close-scorecard-preview"),
   exportJson: document.querySelector("#export-json"),
-  exportImage: document.querySelector("#export-image")
+  exportImage: document.querySelector("#export-image"),
+  lineupContent: document.querySelector("#lineup-content"),
+  toggleLineup: document.querySelector("#toggle-lineup"),
+  userManual: document.querySelector("#user-manual"),
+  openManual: document.querySelector("#open-manual"),
+  closeManual: document.querySelector("#close-manual"),
+  infoDialog: document.querySelector("#info-dialog"),
+  infoDialogTitle: document.querySelector("#info-dialog-title"),
+  infoDialogMessage: document.querySelector("#info-dialog-message"),
+  closeInfoDialog: document.querySelector("#close-info-dialog"),
+  confirmDialog: document.querySelector("#confirm-dialog"),
+  confirmDialogTitle: document.querySelector("#confirm-dialog-title"),
+  confirmDialogMessage: document.querySelector("#confirm-dialog-message"),
+  cancelConfirm: document.querySelector("#cancel-confirm"),
+  acceptConfirm: document.querySelector("#accept-confirm")
 };
 
 let game = loadGame();
 let selectedPlayerId = null;
-let setupCollapsed = false;
+let setupCollapsed = isMobileLayout() && Boolean(game);
+let lineupCollapsed = isMobileLayout() && Boolean(game);
+let pendingConfirmation = null;
+
+function isMobileLayout() {
+  return window.matchMedia?.("(max-width: 760px)").matches ?? false;
+}
 
 function makeId() {
   return `p-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -60,6 +82,8 @@ function loadGame() {
     if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.teams) || parsed.teams.length !== 2) {
       throw new Error("The saved game has an unsupported format.");
     }
+    parsed.playersPerInning ??= 9;
+    parsed.outsPerInning ??= 3;
     return parsed;
   } catch (error) {
     console.error("Could not load the saved game:", error);
@@ -122,6 +146,7 @@ function undoLastAction() {
   game.redoHistory.push(JSON.stringify(game.teams));
   game.teams = JSON.parse(game.undoHistory.pop());
   selectedPlayerId = null;
+  showScoringMessage("");
   persistGame();
   render();
 }
@@ -132,6 +157,7 @@ function redoAction() {
   game.undoHistory.push(JSON.stringify(game.teams));
   game.teams = JSON.parse(game.redoHistory.pop());
   selectedPlayerId = null;
+  showScoringMessage("");
   persistGame();
   render();
 }
@@ -155,32 +181,109 @@ function getRunnerBase(team, inning, playerId) {
   return atBat?.status === "onBase" ? atBat.base : null;
 }
 
-function isHalfComplete(team, inning) {
-  const half = getHalf(team, inning);
-  if (game.inningRule === "three-outs") return half.outs >= 3;
-  return half.atBats.length >= team.players.length;
+function beginPlayAction(half, newBatter = false) {
+  if (newBatter || half.activePlayId === undefined) {
+    half.playCounter = (half.playCounter ?? 0) + 1;
+    half.activePlayId = half.playCounter;
+  }
+  half.actionCounter = (half.actionCounter ?? 0) + 1;
+  return { playId: half.activePlayId, actionId: half.actionCounter };
 }
 
-function inningCompletionMessage(team, half) {
-  if (game.inningRule === "three-outs" && half.outs >= 3) {
-    return "Inning complete: all 3 outs have been recorded. Choose another inning to keep scoring.";
+function recordAdvance(atBat, from, to, context) {
+  atBat.advances ??= [];
+  atBat.advanceMeta ??= atBat.advances.map(() => null);
+  const previous = atBat.advances.at(-1);
+  const previousMeta = atBat.advanceMeta.at(-1);
+  if (previous && previousMeta?.playId === context.playId &&
+      previousMeta.actionId !== context.actionId && previous.to === from) {
+    previous.to = to;
+    previousMeta.actionId = context.actionId;
+  } else {
+    atBat.advances.push({ from, to });
+    atBat.advanceMeta.push({ playId: context.playId, actionId: context.actionId });
   }
-  if (game.inningRule === "all-batters" && half.atBats.length >= team.players.length) {
-    return `Inning complete: ${lineupLimitMessage(team)}`;
-  }
-  return "";
+  atBat.path.push(to);
+}
+
+function getAtBatAdvances(atBat) {
+  if (atBat.advances) return atBat.advances;
+  let from = 4;
+  return atBat.path.map(to => {
+    const advance = { from, to };
+    from = to;
+    return advance;
+  });
+}
+
+function getScoringTrace(atBat) {
+  const advances = getAtBatAdvances(atBat);
+  const homeRunRoute = advances.length === 4 &&
+    advances[0].from === 4 && advances[0].to === 1 &&
+    advances[1].from === 1 && advances[1].to === 2 &&
+    advances[2].from === 2 && advances[2].to === 3 &&
+    advances[3].from === 3 && advances[3].to === 4;
+  if (homeRunRoute) return [[4, 1, 2, 3, 4]];
+
+  return advances.map(({ from, to }) => {
+    if (!Number.isInteger(to) || to < 1 || to > 4) return [];
+    if (from === 4) {
+      if (to === 1) return [1];
+      return [4, ...Array.from({ length: to }, (_, index) => index + 1)];
+    }
+    if (!Number.isInteger(from) || from < 1 || from > 3 || to <= from) return [to];
+    if (to === from + 1) return [to];
+    return Array.from({ length: to - from + 1 }, (_, index) => from + index);
+  }).filter(route => route.length);
+}
+
+function inningHasEnded(team, inning) {
+  const half = team.innings?.[inning];
+  return Boolean(half && (
+    half.outs >= (game.outsPerInning ?? 3) ||
+    (half.atBats?.length ?? 0) >= team.players.length
+  ));
+}
+
+function getInningStarter(team, inning) {
+  if (inning <= 1 || !inningHasEnded(team, inning - 1)) return null;
+  const half = team.innings?.[inning];
+  if (half?.atBats?.length) return half.atBats[0].playerId;
+  const previousHalf = team.innings?.[inning - 1];
+  const nextHalf = team.innings?.[inning];
+  if (nextHalf?.atBats?.length) return nextHalf.atBats[0].playerId;
+  const lastAtBat = previousHalf?.atBats?.at(-1);
+  const lastIndex = team.players.findIndex(player => player.id === lastAtBat?.playerId);
+  return lastIndex < 0 ? null : team.players[(lastIndex + 1) % team.players.length]?.id ?? null;
+}
+
+function getInningCrossoverPlayer(team, inning) {
+  if (!inningHasEnded(team, inning)) return null;
+  return getInningStarter(team, inning + 1);
+}
+
+function isHalfComplete(team, inning) {
+  const half = getHalf(team, inning);
+  return nextBatter(team, half) === null;
+}
+
+function inningCompletionMessage(team, inning) {
+  if (!isHalfComplete(team, inning)) return "";
+  return `Inning complete: all ${team.players.length} players have had a turn. Choose another inning to keep scoring.`;
 }
 
 function lineupLimitMessage(team) {
-  const message = team.players.length === 1
+  const limit = Math.min(game.playersPerInning, team.players.length);
+  const message = limit === 1
     ? "The only player has batted this inning."
-    : `All ${team.players.length} players have batted this inning.`;
+    : `${limit} hitters have batted this inning.`;
   return `${message} Choose another inning to keep scoring.`;
 }
 
-function showScoringMessage(message) {
+function showScoringMessage(message, success = false) {
   els.scoringMessage.textContent = message;
   els.scoringMessage.hidden = !message;
+  els.scoringMessage.classList.toggle("success", success);
 }
 
 function parseLineup(text) {
@@ -201,6 +304,8 @@ function saveSetup() {
   const homePlayers = parseLineup(els.homeLineup.value);
   const awayPlayers = parseLineup(els.awayLineup.value);
   const innings = Number(els.inningsCount.value);
+  const playersPerInning = Number(els.playersPerInning.value);
+  const outsPerInning = Number(els.outsPerInning.value);
   if (!els.homeName.value.trim() || !els.awayName.value.trim()) {
     window.alert("Please enter a name for both teams.");
     return;
@@ -213,6 +318,14 @@ function saveSetup() {
     window.alert("Choose between 1 and 12 innings.");
     return;
   }
+  if (!Number.isSafeInteger(playersPerInning) || playersPerInning < 1) {
+    window.alert("Enter a positive whole number of hitters per inning.");
+    return;
+  }
+  if (!Number.isSafeInteger(outsPerInning) || outsPerInning < 1) {
+    window.alert("Enter a positive whole number of outs per inning.");
+    return;
+  }
   if (homePlayers.length > 40 || awayPlayers.length > 40) {
     window.alert("Each lineup can have up to 40 players.");
     return;
@@ -222,21 +335,51 @@ function saveSetup() {
     createTeam("home", els.homeName.value, homePlayers),
     createTeam("away", els.awayName.value, awayPlayers)
   ];
-  if (game && !window.confirm("Save this setup as a new game? This replaces the game currently saved on this device.")) return;
+  if (game) {
+    askForConfirmation(
+      "Replace saved game?",
+      "Save this setup as a new game? This replaces the game currently saved on this device.",
+      "Yes, replace game",
+      () => applySetup(updatedTeams, innings, playersPerInning, outsPerInning)
+    );
+    return;
+  }
+  applySetup(updatedTeams, innings, playersPerInning, outsPerInning);
+}
+
+function applySetup(updatedTeams, innings, playersPerInning, outsPerInning) {
   game = {
     version: 1,
     name: els.gameName.value.trim(),
     date: els.gameDate.value,
     ground: els.gameGround.value.trim(),
     innings,
-    inningRule: els.inningRule.value,
+    playersPerInning,
+    outsPerInning,
     teams: updatedTeams
   };
   selectedPlayerId = null;
+  setupCollapsed = isMobileLayout();
+  lineupCollapsed = isMobileLayout();
   els.battingTeam.value = game.teams[0].id;
   els.inningSelect.value = "1";
   persistGame();
   render();
+}
+
+function askForConfirmation(title, message, acceptText, onAccept) {
+  pendingConfirmation = onAccept;
+  els.confirmDialogTitle.textContent = title;
+  els.confirmDialogMessage.textContent = message;
+  els.acceptConfirm.textContent = acceptText;
+  openDialog(els.confirmDialog);
+}
+
+function resolveConfirmation(accepted) {
+  const onAccept = pendingConfirmation;
+  pendingConfirmation = null;
+  closeDialog(els.confirmDialog);
+  if (accepted) onAccept?.();
 }
 
 function recordBase(playerId, destination) {
@@ -245,12 +388,14 @@ function recordBase(playerId, destination) {
   if (!team) return;
   const half = getHalf(team, inning);
   if (isHalfComplete(team, inning)) {
-    showScoringMessage(inningCompletionMessage(team, half));
+    showScoringMessage(inningCompletionMessage(team, inning));
     return;
   }
+  const scoredNames = [];
   const atBat = getAtBat(team, inning, playerId);
   const batter = getPlayer(team, playerId);
   if (!batter) return;
+  let moveContext;
 
   if (!atBat) {
     const upcomingBatter = nextBatter(team, half);
@@ -267,29 +412,36 @@ function recordBase(playerId, destination) {
     if (destination === 4) {
       const occupied = getOccupied(team, inning);
       const scoringNames = [...occupied.values()].map(runnerId => getPlayer(team, runnerId)?.name).filter(Boolean);
-      if (scoringNames.length && !confirmScorers(scoringNames)) return;
+      scoredNames.push(...scoringNames, batter.name);
       saveUndoPoint();
+      moveContext = beginPlayAction(half, true);
       for (const runnerId of occupied.values()) {
         const runner = getAtBat(team, inning, runnerId);
         if (!runner) continue;
-        for (let base = runner.base + 1; base <= 4; base += 1) runner.path.push(base);
+        recordAdvance(runner, runner.base, 4, moveContext);
         runner.status = "run";
         runner.base = null;
       }
-      half.atBats.push({ playerId, path: [1, 2, 3, 4], status: "run", base: null, outNumber: null });
+      const batterAtBat = { playerId, path: [], advances: [], status: "run", base: null, outNumber: null };
+      for (const base of [1, 2, 3, 4]) recordAdvance(batterAtBat, base === 1 ? 4 : base - 1, base, moveContext);
+      half.atBats.push(batterAtBat);
       half.runs += occupied.size + 1;
     } else {
       const cascade = planRunnerCascade(team, inning, destination);
-      if (cascade.scoring.length && !confirmScorers(cascade.scoring)) return;
+      scoredNames.push(...cascade.scoring);
       saveUndoPoint();
-      applyRunnerCascade(team, inning, cascade.moves);
-      half.atBats.push({
+      moveContext = beginPlayAction(half, true);
+      applyRunnerCascade(team, inning, cascade.moves, moveContext);
+      const batterAtBat = {
         playerId,
-        path: Array.from({ length: destination }, (_, index) => index + 1),
+        path: [],
+        advances: [],
         status: "onBase",
         base: destination,
         outNumber: null
-      });
+      };
+      recordAdvance(batterAtBat, 4, destination, moveContext);
+      half.atBats.push(batterAtBat);
     }
     team.nextBatterIndex = (team.players.findIndex(player => player.id === playerId) + 1) % team.players.length;
   } else {
@@ -303,21 +455,24 @@ function recordBase(playerId, destination) {
     }
     if (destination === 4) {
       saveUndoPoint();
-      for (let base = atBat.base + 1; base <= 4; base += 1) atBat.path.push(base);
+      moveContext = beginPlayAction(half);
+      recordAdvance(atBat, atBat.base, 4, moveContext);
       atBat.status = "run";
       atBat.base = null;
       half.runs += 1;
+      scoredNames.push(batter.name);
     } else {
       const cascade = planRunnerCascade(team, inning, destination, playerId, atBat.base);
-      if (cascade.scoring.length && !confirmScorers(cascade.scoring)) return;
+      scoredNames.push(...cascade.scoring);
       saveUndoPoint();
-      applyRunnerCascade(team, inning, cascade.moves);
-      for (let base = atBat.base + 1; base <= destination; base += 1) atBat.path.push(base);
+      moveContext = beginPlayAction(half);
+      applyRunnerCascade(team, inning, cascade.moves, moveContext);
+      recordAdvance(atBat, atBat.base, destination, moveContext);
       atBat.base = destination;
     }
   }
   selectedPlayerId = null;
-  showScoringMessage("");
+  showScoringMessage(scoredNames.length ? `${scoredNames.join(", ")} moved home and scored.` : "", scoredNames.length > 0);
   updateCompletion(team, inning);
   persistGame();
   render();
@@ -356,16 +511,12 @@ function planRunnerCascade(team, inning, destination, movingPlayerId = null, mov
   return { moves, scoring };
 }
 
-function confirmScorers(playerNames) {
-  return window.confirm(`Confirm that ${playerNames.join(", ")} reached home?`);
-}
-
-function applyRunnerCascade(team, inning, moves) {
+function applyRunnerCascade(team, inning, moves, context) {
   const half = getHalf(team, inning);
   for (const move of moves) {
     const atBat = getAtBat(team, inning, move.playerId);
     if (!atBat) continue;
-    for (let base = atBat.base + 1; base <= move.destination; base += 1) atBat.path.push(base);
+    recordAdvance(atBat, atBat.base, move.destination, context);
     if (move.destination === 4) {
       atBat.status = "run";
       atBat.base = null;
@@ -389,7 +540,7 @@ function recordOut(playerId = selectedPlayerId || nextBatter(currentTeam())?.id)
   }
   const half = getHalf(team, inning);
   if (isHalfComplete(team, inning)) {
-    showScoringMessage(inningCompletionMessage(team, half));
+    showScoringMessage(inningCompletionMessage(team, inning));
     return;
   }
   let atBat = getAtBat(team, inning, playerId);
@@ -402,6 +553,7 @@ function recordOut(playerId = selectedPlayerId || nextBatter(currentTeam())?.id)
       return;
     }
     saveUndoPoint();
+    beginPlayAction(half, true);
     atBat = { playerId, path: [], status: "out", base: null, outNumber: null };
     half.atBats.push(atBat);
     team.nextBatterIndex = (team.players.findIndex(player => player.id === playerId) + 1) % team.players.length;
@@ -417,6 +569,26 @@ function recordOut(playerId = selectedPlayerId || nextBatter(currentTeam())?.id)
   atBat.outNumber = half.outs;
   selectedPlayerId = null;
   showScoringMessage("");
+  updateCompletion(team, inning);
+  persistGame();
+  render();
+}
+
+function skipPlayer(playerId) {
+  const team = currentTeam();
+  const inning = currentInning();
+  if (!team) return;
+  const half = getHalf(team, inning);
+  const player = getPlayer(team, playerId);
+  if (!player || getAtBat(team, inning, playerId) || nextBatter(team, half)?.id !== playerId) {
+    showScoringMessage("Only the next batter can be skipped.");
+    return;
+  }
+  saveUndoPoint();
+  half.atBats.push({ playerId, path: [], advances: [], status: "skipped", base: null, outNumber: null });
+  team.nextBatterIndex = (team.players.findIndex(candidate => candidate.id === playerId) + 1) % team.players.length;
+  selectedPlayerId = null;
+  showScoringMessage(`${player.name} skipped. The next player is up.`);
   updateCompletion(team, inning);
   persistGame();
   render();
@@ -477,7 +649,7 @@ function renderTeamAndInningsOptions() {
 
 function renderLineup(team, inning) {
   const half = getHalf(team, inning);
-  const batter = nextBatter(team, half);
+  const batter = isHalfComplete(team, inning) ? null : nextBatter(team, half);
   els.lineupTitle.textContent = `${team.name} lineup`;
   els.nextBatterBadge.textContent = batter ? `Up next: ${batter.name}` : "Lineup complete";
   els.lineupList.replaceChildren();
@@ -515,7 +687,9 @@ function renderLineup(team, inning) {
     name.textContent = player.name;
     const status = document.createElement("span");
     status.className = "player-status";
-    status.textContent = atBat ? (atBat.status === "onBase" ? `${BASE_NAMES[atBat.base]} base` : atBat.status === "run" ? "Run" : `Out ${atBat.outNumber}`) : (player.id === batter?.id ? "UP" : "");
+    status.textContent = atBat
+      ? (atBat.status === "onBase" ? `${BASE_NAMES[atBat.base]} base` : atBat.status === "run" ? "Run" : atBat.status === "out" ? `Out ${atBat.outNumber}` : "Skipped")
+      : (player.id === batter?.id ? "UP" : "");
     li.append(order, name, status);
     els.lineupList.append(li);
   });
@@ -525,6 +699,7 @@ function playerStatusLabel(player, atBat, batter) {
   if (atBat?.status === "onBase") return `${player.name}, on ${BASE_NAMES[atBat.base]} base. Select to move runner.`;
   if (atBat?.status === "run") return `${player.name}, scored a run.`;
   if (atBat?.status === "out") return `${player.name}, out ${atBat.outNumber}.`;
+  if (atBat?.status === "skipped") return `${player.name}, skipped this inning.`;
   return player.id === batter?.id ? `${player.name}, next batter.` : `${player.name}, waiting in lineup.`;
 }
 
@@ -532,6 +707,10 @@ function selectPlayer(playerId) {
   const team = currentTeam();
   if (!team) return;
   const half = getHalf(team, currentInning());
+  if (isHalfComplete(team, currentInning())) {
+    showScoringMessage(inningCompletionMessage(team, currentInning()));
+    return;
+  }
   const player = getPlayer(team, playerId);
   const atBat = getAtBat(team, currentInning(), playerId);
   if (!player || (atBat && atBat.status !== "onBase")) return;
@@ -546,7 +725,7 @@ function selectPlayer(playerId) {
 
 function renderDiamond(team, inning) {
   const occupied = getOccupied(team, inning);
-  const batter = nextBatter(team, getHalf(team, inning));
+  const batter = isHalfComplete(team, inning) ? null : nextBatter(team, getHalf(team, inning));
   const occupiedBases = [...occupied.entries()]
     .sort(([baseA], [baseB]) => baseA - baseB)
     .map(([base, playerId]) => `${BASE_NAMES[base]}: ${getPlayer(team, playerId)?.name ?? "Unknown player"}`);
@@ -559,18 +738,20 @@ function renderDiamond(team, inning) {
     const player = playerId ? getPlayer(team, playerId) : null;
     const occupant = baseButton.querySelector(".base-occupant");
     occupant.textContent = player?.name ?? "";
-    occupant.disabled = !player;
     occupant.setAttribute("aria-label", player ? `Select ${player.name} on ${BASE_NAMES[base]} base` : "");
     baseButton.classList.toggle("has-player", Boolean(player));
     baseButton.setAttribute("aria-label", player ? `${BASE_NAMES[base]} base, ${player.name}` : `${BASE_NAMES[base]} base`);
+    baseButton.setAttribute("aria-disabled", String(isHalfComplete(team, inning)));
   }
-  const nextPlayerButton = document.getElementById("diamond-next-player");
+  const nextPlayerButton = els.diamondNextPlayer;
   nextPlayerButton.textContent = batter ? `Next up: ${batter.name}` : "No next player";
   nextPlayerButton.disabled = !batter || isHalfComplete(team, inning);
   nextPlayerButton.onclick = () => {
     if (batter) selectPlayer(batter.id);
   };
-  els.selectedPlayer.textContent = selectedPlayerId ? `Selected: ${getPlayer(team, selectedPlayerId)?.name ?? "player"}` : `Next: ${nextBatter(team)?.name ?? "lineup complete"}`;
+  els.selectedPlayer.textContent = selectedPlayerId
+    ? `Selected: ${getPlayer(team, selectedPlayerId)?.name ?? "player"}`
+    : `Next: ${batter?.name ?? "lineup complete"}`;
   renderPlayerMoveOptions(team, inning);
 }
 
@@ -579,8 +760,9 @@ function renderPlayerMoveOptions(team, inning) {
   const half = getHalf(team, inning);
   const atBat = player ? getAtBat(team, inning, player.id) : null;
   els.playerMoveOptions.replaceChildren();
-  els.playerMoveOptions.hidden = !player;
-  if (!player) return;
+  const complete = isHalfComplete(team, inning);
+  els.playerMoveOptions.hidden = !player || complete;
+  if (!player || complete) return;
 
   const heading = document.createElement("span");
   heading.className = "move-options-label";
@@ -605,15 +787,24 @@ function renderPlayerMoveOptions(team, inning) {
   outButton.disabled = isHalfComplete(team, inning);
   outButton.addEventListener("click", () => recordOut(player.id));
   els.playerMoveOptions.append(outButton);
+  if (!atBat) {
+    const skipButton = document.createElement("button");
+    skipButton.type = "button";
+    skipButton.className = "button button-quiet move-option";
+    skipButton.textContent = "Skip player";
+    skipButton.addEventListener("click", () => skipPlayer(player.id));
+    els.playerMoveOptions.append(skipButton);
+  }
 }
 
 function renderInningSummary(team, inning) {
   const half = getHalf(team, inning);
   const lineupPlayed = half.atBats.length;
+  const hitterLimit = game.playersPerInning;
   const runs = half.runs;
   const stats = [
-    ["Played", `${lineupPlayed}/${team.players.length}`],
-    ["Outs", `${half.outs}/3`],
+    ["Played", `${lineupPlayed}/${hitterLimit}`],
+    ["Outs", half.outs],
     ["Runs", runs]
   ];
   els.inningSummary.replaceChildren();
@@ -628,16 +819,17 @@ function renderInningSummary(team, inning) {
     els.inningSummary.append(stat);
   });
   const complete = isHalfComplete(team, inning);
+  const warnings = [];
+  if (lineupPlayed >= hitterLimit) warnings.push(`Maximum of ${hitterLimit} hitters reached`);
+  const outsReached = half.outs >= game.outsPerInning;
+  if (outsReached) warnings.push(`${half.outs} outs recorded; the inning should end`);
   els.inningAlert.hidden = false;
-  els.inningAlert.classList.toggle("complete", complete);
-  if (complete) {
-    els.inningAlert.textContent = game.inningRule === "three-outs"
-      ? `Inning complete — ${half.outs} outs recorded. ${lineupPlayed} of ${team.players.length} players batted.`
-      : `Inning complete — all ${team.players.length} players have batted. ${half.outs} outs recorded.`;
-  } else if (half.outs >= 3) {
-    els.inningAlert.textContent = `Three outs recorded. The inning continues because the current rule is to bat through the lineup.`;
-  } else if (lineupPlayed >= team.players.length) {
-    els.inningAlert.textContent = `Every player has batted. The inning continues until three outs under the current rule.`;
+  els.inningAlert.classList.toggle("complete", complete && warnings.length === 0);
+  els.inningAlert.classList.toggle("warning", warnings.length > 0);
+  if (warnings.length) {
+    els.inningAlert.textContent = `${warnings.join(". ")}.${outsReached ? "" : " You can keep scoring."}${complete ? " All players have had a turn; choose another inning." : ""}`;
+  } else if (complete) {
+    els.inningAlert.textContent = `Inning complete — all ${team.players.length} players have had a turn. ${half.outs} outs recorded.`;
   } else {
     els.inningAlert.hidden = true;
     els.inningAlert.textContent = "";
@@ -646,7 +838,6 @@ function renderInningSummary(team, inning) {
 
 function renderInningScorecard(team, inning) {
   const half = getHalf(team, inning);
-  const playerAtBats = new Map(half.atBats.map(atBat => [atBat.playerId, atBat]));
   els.scorecardTeamLabel.textContent = `${team.name} · Inning ${inning}`;
   els.inningScorecard.replaceChildren();
   const orderedAtBats = half.atBats.slice().sort((a, b) => {
@@ -673,29 +864,66 @@ function renderInningScorecard(team, inning) {
     const progressCell = document.createElement("td");
     const progress = document.createElement("div");
     progress.className = "progress-dots";
-    atBat.path.forEach((base, index) => {
-      const step = document.createElement("span");
-      step.className = `progress-step${base === 4 ? " run" : ""}`;
-      step.title = `Reached ${BASE_NAMES[base]} base`;
-      step.setAttribute("aria-label", BASE_NAMES[base]);
-      const dot = document.createElement("i");
-      dot.className = "dot";
-      step.append(dot);
-      progress.append(step);
-    });
-    if (atBat.status === "out" && atBat.path.length === 0) {
-      const outDot = document.createElement("span");
-      outDot.className = "progress-step";
-      const dot = document.createElement("i");
-      dot.className = "dot";
-      outDot.append(dot);
-      progress.append(outDot);
+    if (inning > 1 && atBat === half.atBats[0] && getInningStarter(team, inning) === atBat.playerId) {
+      progress.classList.add("inning-start");
     }
+    const basePoints = {
+      1: [86, 50],
+      2: [50, 16],
+      3: [14, 50],
+      4: [50, 84]
+    };
+    const traces = getScoringTrace(atBat);
+    const visitedBases = new Set();
+    traces.forEach(route => {
+      const visibleRoute = route.filter((base, index) => base !== 4 || atBat.status === "run" || (index === 0 && route.length > 1));
+      visibleRoute.forEach(base => visitedBases.add(base));
+      for (let index = 1; index < visibleRoute.length; index += 1) {
+        const from = visibleRoute[index - 1];
+        const to = visibleRoute[index];
+        const [fromX, fromY] = basePoints[from];
+        const [toX, toY] = basePoints[to];
+        const line = document.createElement("span");
+        line.className = "dot-connection";
+        line.setAttribute("aria-hidden", "true");
+        const length = Math.hypot(toX - fromX, toY - fromY);
+        const angle = Math.atan2(toY - fromY, toX - fromX);
+        line.style.left = `${fromX}%`;
+        line.style.top = `${fromY}%`;
+        line.style.width = `${length}%`;
+        line.style.transform = `rotate(${angle}rad)`;
+        progress.append(line);
+      }
+      if (visibleRoute.length > 1) {
+        const end = visibleRoute[visibleRoute.length - 1];
+        const previous = visibleRoute[visibleRoute.length - 2];
+        const arrow = document.createElement("span");
+        arrow.className = "dot-arrow";
+        arrow.setAttribute("aria-hidden", "true");
+        arrow.style.left = `${basePoints[end][0]}%`;
+        arrow.style.top = `${basePoints[end][1]}%`;
+        arrow.style.transform = `translate(-50%, -50%) rotate(${Math.atan2(basePoints[end][1] - basePoints[previous][1], basePoints[end][0] - basePoints[previous][0])}rad)`;
+        arrow.title = `Stopped at ${BASE_NAMES[end]}`;
+        progress.append(arrow);
+      }
+    });
+    for (const base of visitedBases) {
+      const dot = document.createElement("i");
+      dot.className = "base-dot";
+      dot.dataset.base = String(base);
+      dot.title = `${BASE_NAMES[base]} base`;
+      dot.setAttribute("aria-label", `${BASE_NAMES[base]} base`);
+      dot.style.left = `${basePoints[base][0]}%`;
+      dot.style.top = `${basePoints[base][1]}%`;
+      progress.append(dot);
+    }
+    if (atBat.status === "run") progress.classList.add("scored");
+    if (atBat.status === "out") progress.dataset.out = String(atBat.outNumber);
     progressCell.append(progress);
     const result = document.createElement("td");
     const tag = document.createElement("span");
-    tag.className = `result-tag${atBat.status === "out" ? " out" : atBat.status === "run" ? " run" : ""}`;
-    tag.textContent = atBat.status === "out" ? `Out ${atBat.outNumber}` : atBat.status === "run" ? "Run" : `On ${BASE_NAMES[atBat.base]}`;
+    tag.className = `result-tag${atBat.status === "out" ? " out" : atBat.status === "run" ? " run" : atBat.status === "skipped" ? " skipped" : ""}`;
+    tag.textContent = atBat.status === "out" ? `Out ${atBat.outNumber}` : atBat.status === "run" ? "Run" : atBat.status === "skipped" ? "Skipped" : `On ${BASE_NAMES[atBat.base]}`;
     result.append(tag);
     row.append(order, name, progressCell, result);
     els.inningScorecard.append(row);
@@ -706,14 +934,18 @@ function renderScoring() {
   const team = currentTeam();
   if (!team) return;
   const inning = currentInning();
-  const completionMessage = inningCompletionMessage(team, getHalf(team, inning));
-  if (completionMessage) showScoringMessage(completionMessage);
+  const completionMessage = inningCompletionMessage(team, inning);
+  if (completionMessage && !els.scoringMessage.classList.contains("success")) {
+    showScoringMessage(completionMessage);
+  }
   renderLineup(team, inning);
   renderDiamond(team, inning);
   renderInningSummary(team, inning);
   renderInningScorecard(team, inning);
   els.diamondOut.disabled = isHalfComplete(team, inning);
-  els.diamondOut.title = els.diamondOut.disabled ? inningCompletionMessage(team, getHalf(team, inning)) : "Record the selected player, or next batter, as out";
+  els.diamondOut.title = els.diamondOut.disabled
+    ? inningCompletionMessage(team, inning)
+    : "Record the selected player, or next batter, as out";
   els.undoLastAction.disabled = !game.undoHistory?.length;
   els.undoLastAction.title = els.undoLastAction.disabled ? "No earlier scoring state" : "Go back one scoring action";
   els.redoAction.disabled = !game.redoHistory?.length;
@@ -730,6 +962,9 @@ function render() {
   els.setupContent.hidden = setupCollapsed;
   els.toggleSetup.textContent = setupCollapsed ? "Show setup" : "Hide setup";
   els.toggleSetup.setAttribute("aria-expanded", String(!setupCollapsed));
+  els.lineupContent.hidden = lineupCollapsed;
+  els.toggleLineup.textContent = lineupCollapsed ? "Show batting order" : "Hide batting order";
+  els.toggleLineup.setAttribute("aria-expanded", String(!lineupCollapsed));
   renderTeamAndInningsOptions();
   renderScoreboard();
   renderScoring();
@@ -748,6 +983,25 @@ function downloadBlob(blob, filename) {
 
 function safeFilename(text) {
   return (text || "tball-scorecard").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "tball-scorecard";
+}
+
+function openDialog(dialog) {
+  if (dialog.open) return;
+  if (typeof dialog.showModal === "function") {
+    dialog.showModal();
+    return;
+  }
+  dialog.classList.add("dialog-fallback");
+  dialog.setAttribute("open", "");
+}
+
+function closeDialog(dialog) {
+  if (typeof dialog.close === "function" && dialog.open) {
+    dialog.close();
+    return;
+  }
+  dialog.removeAttribute("open");
+  dialog.classList.remove("dialog-fallback");
 }
 
 function exportJson() {
@@ -784,24 +1038,41 @@ function drawDotScoreCell(ctx, x, y, size, atBat) {
   ctx.stroke();
   if (!atBat) return;
 
-  const scoringPath = atBat.path.filter(base => base !== 4 || atBat.status === "run");
-  if (scoringPath.length) {
-    ctx.strokeStyle = "#111";
-    ctx.fillStyle = "#111";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    scoringPath.forEach((base, index) => {
-      const [px, py] = points[base];
-      if (index === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    });
-    ctx.stroke();
-    for (const base of scoringPath) {
-      const [px, py] = points[base];
+  const traces = getScoringTrace(atBat)
+    .map(route => route.filter((base, index) => base !== 4 || atBat.status === "run" || (index === 0 && route.length > 1)))
+    .filter(route => route.length);
+  const visitedBases = new Set();
+  const arrowHeads = [];
+  ctx.fillStyle = "#111";
+  ctx.strokeStyle = "#111";
+  ctx.lineWidth = 2;
+  for (const route of traces) {
+    route.forEach(base => visitedBases.add(base));
+    for (let index = 1; index < route.length; index += 1) {
+      const [fromX, fromY] = points[route[index - 1]];
+      const [toX, toY] = points[route[index]];
+      const angle = Math.atan2(toY - fromY, toX - fromX);
       ctx.beginPath();
-      ctx.arc(px, py, Math.max(2.5, size * .045), 0, Math.PI * 2);
-      ctx.fill();
+      ctx.moveTo(fromX, fromY);
+      ctx.lineTo(toX, toY);
+      ctx.stroke();
+      if (index === route.length - 1) arrowHeads.push({ x: toX, y: toY, angle });
     }
+  }
+  for (const base of visitedBases) {
+    const [px, py] = points[base];
+    ctx.beginPath();
+    ctx.arc(px, py, Math.max(2.5, size * .045), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  for (const { x: toX, y: toY, angle } of arrowHeads) {
+    const arrowSize = Math.max(4, size * .08);
+    ctx.beginPath();
+    ctx.moveTo(toX, toY);
+    ctx.lineTo(toX - arrowSize * Math.cos(angle - Math.PI / 6), toY - arrowSize * Math.sin(angle - Math.PI / 6));
+    ctx.lineTo(toX - arrowSize * Math.cos(angle + Math.PI / 6), toY - arrowSize * Math.sin(angle + Math.PI / 6));
+    ctx.closePath();
+    ctx.fill();
   }
   if (atBat.status === "run") {
     ctx.fillStyle = "#111";
@@ -894,6 +1165,26 @@ function drawTeamScorecard(ctx, team, x, y, panelWidth, rowHeight, inningWidth, 
       const atBat = player && inning <= game.innings ? getAtBat(team, inning, player.id) : null;
       const cellSize = Math.min(inningWidth, rowHeight);
       drawDotScoreCell(ctx, cellX + (inningWidth - cellSize) / 2, rowY + (rowHeight - cellSize) / 2, cellSize, atBat);
+      if (player && inning <= game.innings) {
+        const crossoverPlayerId = getInningCrossoverPlayer(team, inning);
+        const startsInInning = inning > 1 && getInningStarter(team, inning) === player.id;
+        if (crossoverPlayerId === player.id) {
+          ctx.strokeStyle = "#111";
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(cellX, rowY + rowHeight);
+          ctx.lineTo(cellX + inningWidth, rowY);
+          ctx.stroke();
+        }
+        if (startsInInning) {
+          ctx.strokeStyle = "#111";
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(cellX, rowY);
+          ctx.lineTo(cellX + inningWidth, rowY);
+          ctx.stroke();
+        }
+      }
     }
   }
 
@@ -970,7 +1261,7 @@ function showScorecardPreview() {
   }
   canvas.className = "scorecard-preview-canvas";
   els.scorecardPreviewContent.replaceChildren(canvas);
-  els.scorecardPreview.showModal();
+  openDialog(els.scorecardPreview);
 }
 
 function exportImage() {
@@ -989,10 +1280,24 @@ function exportImage() {
   }, "image/jpeg", 0.95);
 }
 
+function showUserManual(context = "") {
+  openDialog(els.userManual);
+}
+
+function showContextHelp(button) {
+  els.infoDialogTitle.textContent = button.getAttribute("aria-label").replace(/^More information about\s+/i, "");
+  els.infoDialogMessage.textContent = button.dataset.help;
+  openDialog(els.infoDialog);
+}
+
 function bindEvents() {
   els.startGame.addEventListener("click", saveSetup);
   els.toggleSetup.addEventListener("click", () => {
     setupCollapsed = !setupCollapsed;
+    render();
+  });
+  els.toggleLineup.addEventListener("click", () => {
+    lineupCollapsed = !lineupCollapsed;
     render();
   });
   els.battingTeam.addEventListener("change", () => {
@@ -1009,16 +1314,41 @@ function bindEvents() {
   els.undoLastAction.addEventListener("click", undoLastAction);
   els.redoAction.addEventListener("click", redoAction);
   els.viewScorecard.addEventListener("click", showScorecardPreview);
-  els.closeScorecardPreview.addEventListener("click", () => els.scorecardPreview.close());
+  els.closeScorecardPreview.addEventListener("click", () => closeDialog(els.scorecardPreview));
+  els.openManual.addEventListener("click", () => showUserManual());
+  els.closeManual.addEventListener("click", () => closeDialog(els.userManual));
+  els.closeInfoDialog.addEventListener("click", () => closeDialog(els.infoDialog));
+  els.cancelConfirm.addEventListener("click", () => resolveConfirmation(false));
+  els.acceptConfirm.addEventListener("click", () => resolveConfirmation(true));
+  els.confirmDialog.addEventListener("cancel", event => {
+    event.preventDefault();
+    resolveConfirmation(false);
+  });
+  for (const button of document.querySelectorAll?.(".info-button") ?? []) {
+    button.addEventListener("click", event => {
+      event.preventDefault();
+      showContextHelp(button);
+    });
+  }
   els.exportJson.addEventListener("click", exportJson);
   els.exportImage.addEventListener("click", exportImage);
   for (const base of els.diamond.querySelectorAll(".base[data-base]")) {
-    base.addEventListener("click", event => {
-      if (!event.target.closest(".base-occupant")) return;
+    const handleBaseSelection = () => {
       const team = currentTeam();
       const inning = currentInning();
       const occupiedId = getOccupied(team, inning).get(Number(base.dataset.base));
-      if (occupiedId) selectPlayer(occupiedId);
+      if (occupiedId) {
+        selectPlayer(occupiedId);
+      } else if (selectedPlayerId) {
+        recordBase(selectedPlayerId, Number(base.dataset.base));
+      }
+    };
+    base.addEventListener("click", handleBaseSelection);
+    base.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        handleBaseSelection();
+      }
     });
   }
   els.diamondOut.addEventListener("dragover", event => {
@@ -1032,18 +1362,38 @@ function bindEvents() {
     const playerId = event.dataTransfer.getData("text/plain") || selectedPlayerId || nextBatter(currentTeam())?.id;
     recordOut(playerId);
   });
+  window.addEventListener?.("resize", () => {
+    if (!game) return;
+    const mobile = isMobileLayout();
+    setupCollapsed = mobile;
+    lineupCollapsed = mobile;
+    render();
+  });
+  window.addEventListener?.("keydown", event => {
+    if (event.key !== "Escape") return;
+    for (const dialog of [els.userManual, els.infoDialog, els.confirmDialog, els.scorecardPreview]) {
+      if (dialog.classList.contains("dialog-fallback")) {
+        if (dialog === els.confirmDialog) resolveConfirmation(false);
+        else closeDialog(dialog);
+      }
+    }
+  });
 }
 
 function populateSetupFromGame() {
   if (!game) {
     els.gameDate.value = new Date().toISOString().slice(0, 10);
+    els.inningsCount.value = "12";
+    els.playersPerInning.value = "9";
+    els.outsPerInning.value = "3";
     return;
   }
   els.gameName.value = game.name ?? "";
   els.gameDate.value = game.date || new Date().toISOString().slice(0, 10);
   els.gameGround.value = game.ground ?? "";
   els.inningsCount.value = String(game.innings);
-  els.inningRule.value = game.inningRule;
+  els.playersPerInning.value = String(game.playersPerInning ?? 9);
+  els.outsPerInning.value = String(game.outsPerInning ?? 3);
   els.homeName.value = game.teams[0].name;
   els.awayName.value = game.teams[1].name;
   els.homeLineup.value = game.teams[0].players.map(player => player.name).join("\n");
