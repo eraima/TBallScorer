@@ -333,13 +333,15 @@ function inningHasEnded(team, inning) {
 }
 
 function getInningStarter(team, inning) {
-  if (inning <= 1 || !inningHasEnded(team, inning - 1)) return null;
-  const previousHalf = team.innings?.[inning - 1];
-  const lastAtBat = previousHalf?.atBats?.at(-1);
-  const lastIndex = team.players.findIndex(player => player.id === lastAtBat?.playerId);
-  if (lastIndex >= 0) return team.players[(lastIndex + 1) % team.players.length]?.id ?? null;
-  const nextIndex = team.nextBatterIndex ?? 0;
-  return team.players[nextIndex % team.players.length]?.id ?? null;
+  if (inning <= 1) return null;
+
+  let totalAtBats = 0;
+  for (let i = 1; i < inning; i++) {
+    totalAtBats += team.innings?.[i]?.atBats?.length ?? 0;
+  }
+
+  const starterIndex = totalAtBats % team.players.length;
+  return team.players[starterIndex]?.id ?? null;
 }
 
 function isHalfComplete(team, inning) {
@@ -1534,19 +1536,24 @@ function drawTeamScorecard(ctx, team, x, y, panelWidth, rowHeight, inningWidth, 
       const atBat = player && inning <= game.innings ? getAtBat(team, inning, player.id) : null;
       const cellSize = Math.min(inningWidth, rowHeight);
       drawDotScoreCell(ctx, cellX + (inningWidth - cellSize) / 2, rowY + (rowHeight - cellSize) / 2, cellSize, atBat);
-      if (player && inning > 1 && inning <= game.innings && getInningStarter(team, inning) === player.id) {
-        const previousInningCellX = inningsX + (inning - 2) * inningWidth;
-        ctx.strokeStyle = "#111";
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(previousInningCellX, rowY + rowHeight);
-        ctx.lineTo(previousInningCellX + inningWidth, rowY);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(cellX, rowY);
-        ctx.lineTo(cellX + inningWidth, rowY);
-        ctx.stroke();
-      }
+        if (player && inning > 1 && inning <= game.innings && getInningStarter(team, inning) === player.id) {
+          const atBatInCurrentInning = getAtBat(team, inning, player.id);
+          if (!atBatInCurrentInning) continue;
+
+          const previousInningCellX = inningsX + (inning - 2) * inningWidth;
+          ctx.strokeStyle = "#111";
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          // Crossover line in the previous inning box: bottom-left to top-right
+          ctx.moveTo(previousInningCellX, rowY + rowHeight);
+          ctx.lineTo(previousInningCellX + inningWidth, rowY);
+          ctx.stroke();
+          ctx.beginPath();
+          // Continuity line in the current inning box: top-left to top-right
+          ctx.moveTo(cellX, rowY);
+          ctx.lineTo(cellX + inningWidth, rowY);
+          ctx.stroke();
+        }
     }
   }
 
