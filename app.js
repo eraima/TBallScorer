@@ -385,6 +385,10 @@ function updateSetupLineup(teamId) {
   setupRosters[teamId].forEach((name, index) => {
     const item = document.createElement("li");
     item.className = "roster-editor-item";
+    item.draggable = true;
+    item.dataset.index = String(index);
+    item.dataset.team = teamId;
+
     const input = document.createElement("input");
     input.type = "text";
     input.maxLength = 60;
@@ -394,28 +398,7 @@ function updateSetupLineup(teamId) {
       setupRosters[teamId][index] = input.value.trim();
       updateSetupLineup(teamId);
     });
-    const moveUp = document.createElement("button");
-    moveUp.type = "button";
-    moveUp.className = "button button-quiet roster-order";
-    moveUp.textContent = "↑";
-    moveUp.disabled = index === 0;
-    moveUp.setAttribute("aria-label", `Move ${name || `player ${index + 1}`} up`);
-    moveUp.addEventListener("click", () => {
-      [setupRosters[teamId][index - 1], setupRosters[teamId][index]] =
-        [setupRosters[teamId][index], setupRosters[teamId][index - 1]];
-      updateSetupLineup(teamId);
-    });
-    const moveDown = document.createElement("button");
-    moveDown.type = "button";
-    moveDown.className = "button button-quiet roster-order";
-    moveDown.textContent = "↓";
-    moveDown.disabled = index === setupRosters[teamId].length - 1;
-    moveDown.setAttribute("aria-label", `Move ${name || `player ${index + 1}`} down`);
-    moveDown.addEventListener("click", () => {
-      [setupRosters[teamId][index + 1], setupRosters[teamId][index]] =
-        [setupRosters[teamId][index], setupRosters[teamId][index + 1]];
-      updateSetupLineup(teamId);
-    });
+
     const remove = document.createElement("button");
     remove.type = "button";
     remove.className = "button button-danger roster-remove";
@@ -424,7 +407,44 @@ function updateSetupLineup(teamId) {
       setupRosters[teamId].splice(index, 1);
       updateSetupLineup(teamId);
     });
-    item.append(input, moveUp, moveDown, remove);
+
+    item.append(input, remove);
+
+    item.addEventListener("dragstart", event => {
+      event.dataTransfer.setData("text/plain", String(index));
+      event.dataTransfer.setData("teamId", teamId);
+      item.classList.add("dragging");
+    });
+
+    item.addEventListener("dragend", () => {
+      item.classList.remove("dragging");
+    });
+
+    item.addEventListener("dragover", event => {
+      event.preventDefault();
+      item.classList.add("drop-target");
+    });
+
+    item.addEventListener("dragleave", () => {
+      item.classList.remove("drop-target");
+    });
+
+    item.addEventListener("drop", event => {
+      event.preventDefault();
+      item.classList.remove("drop-target");
+      const fromIndex = Number(event.dataTransfer.getData("text/plain"));
+      const fromTeamId = event.dataTransfer.getData("teamId");
+      const toIndex = Number(item.dataset.index);
+
+      if (fromTeamId !== teamId) return;
+      if (fromIndex === toIndex) return;
+
+      const rosterArray = setupRosters[teamId];
+      const [movedItem] = rosterArray.splice(fromIndex, 1);
+      rosterArray.splice(toIndex, 0, movedItem);
+      updateSetupLineup(teamId);
+    });
+
     roster.append(item);
   });
 }
