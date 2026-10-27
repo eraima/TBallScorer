@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#123c35">
   <title>T-ball Scorebook</title>
   <link rel="stylesheet" href="styles.css">
+  <script src="teams.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -51,7 +52,7 @@
             <input id="players-per-inning" type="number" min="1" step="1" value="9" required>
           </label>
           <label class="field">
-            <span>Outs per inning <button class="info-button" type="button" data-help="When this number of players are out, the inning should end. This shows a warning but does not block scoring." aria-label="More information about outs per inning">i</button></span>
+            <span>Outs per inning <button class="info-button" type="button" data-help="When this number of outs is reached, the inning should be ending. You can continue scoring if needed." aria-label="More information about outs per inning">i</button></span>
             <input id="outs-per-inning" type="number" min="1" step="1" value="3" required>
           </label>
         </div>
@@ -60,26 +61,38 @@
           <article class="team-setup-card">
             <div class="team-title-row">
               <label class="field team-name-field">
-                <span>Home team</span>
+                <span>Choose home team</span>
+                <select id="home-team-choice"></select>
+              </label>
+              <label class="field team-name-field">
+                <span>Team name</span>
                 <input id="home-name" type="text" maxlength="40" value="Home Team">
               </label>
             </div>
-            <label class="field">
-              <span>Batting lineup <span class="helper">— one player per line, in order</span> <button class="info-button" type="button" data-help="Enter each player's name on a separate line. The order of the lines is the batting order for that team." aria-label="More information about the home batting lineup">i</button></span>
-              <textarea id="home-lineup" rows="6" placeholder="Add player names, one per line"></textarea>
-            </label>
+            <div class="field">
+              <span>Batting lineup <span class="helper">— edit, remove, or reorder before saving</span> <button class="info-button" type="button" data-help="Edit player names, remove players, or change batting order before saving the game. Player IDs preserve scoring identity once play begins." aria-label="More information about the home batting lineup">i</button></span>
+              <ol id="home-roster" class="roster-editor" aria-label="Home batting lineup"></ol>
+              <button class="button button-quiet roster-add" id="add-home-player" type="button">Add player</button>
+              <textarea id="home-lineup" hidden aria-hidden="true"></textarea>
+            </div>
           </article>
           <article class="team-setup-card away-card">
             <div class="team-title-row">
               <label class="field team-name-field">
-                <span>Away team</span>
+                <span>Choose away team</span>
+                <select id="away-team-choice"></select>
+              </label>
+              <label class="field team-name-field">
+                <span>Team name</span>
                 <input id="away-name" type="text" maxlength="40" value="Away Team">
               </label>
             </div>
-            <label class="field">
-              <span>Batting lineup <span class="helper">— one player per line, in order</span> <button class="info-button" type="button" data-help="Enter each player's name on a separate line. The order of the lines is the batting order for that team." aria-label="More information about the away batting lineup">i</button></span>
-              <textarea id="away-lineup" rows="6" placeholder="Add player names, one per line"></textarea>
-            </label>
+            <div class="field">
+              <span>Batting lineup <span class="helper">— edit, remove, or reorder before saving</span> <button class="info-button" type="button" data-help="Edit player names, remove players, or change batting order before saving the game. Player IDs preserve scoring identity once play begins." aria-label="More information about the away batting lineup">i</button></span>
+              <ol id="away-roster" class="roster-editor" aria-label="Away batting lineup"></ol>
+              <button class="button button-quiet roster-add" id="add-away-player" type="button">Add player</button>
+              <textarea id="away-lineup" hidden aria-hidden="true"></textarea>
+            </div>
           </article>
         </div>
         <div class="setup-actions">
@@ -118,8 +131,6 @@
         <div class="inning-summary" id="inning-summary" aria-live="polite"></div>
       </div>
 
-      <div id="inning-alert" class="inning-alert" role="status" aria-live="polite" hidden></div>
-
       <div class="scoring-layout">
         <section class="panel lineup-panel" aria-labelledby="lineup-title">
           <div class="section-heading compact-heading">
@@ -133,6 +144,14 @@
           <div id="lineup-content">
             <p class="interaction-hint">Select the next player, then choose a base, OUT, or Skip player. Click an occupied base to select its runner. <button class="info-button" type="button" data-help="The batting order shows each player's turn and status. Select the next batter or an on-base runner, then choose where that player stopped." aria-label="More information about the batting order">i</button></p>
             <ol id="lineup-list" class="lineup-list"></ol>
+            <div class="add-player-controls">
+              <label class="field" for="new-player-name">Add player to this team</label>
+              <div class="add-player-row">
+                <input id="new-player-name" type="text" maxlength="60" placeholder="Player name">
+                <button class="button button-quiet" id="add-player" type="button">Add</button>
+              </div>
+              <p class="helper">Players can be renamed or added during a game. Existing players cannot be deleted or reordered after scoring starts.</p>
+            </div>
           </div>
         </section>
 
@@ -144,6 +163,10 @@
               <button class="info-button" type="button" data-help="Select a batter or runner, then choose a destination. The diagram and inning scorecard mark the bases reached; arrows show the endpoint of a multi-base run." aria-label="More information about moving players">i</button>
             </div>
             <span class="selected-player" id="selected-player">Select the next batter</span>
+          </div>
+          <div class="inning-alert-row">
+            <div id="inning-alert" class="inning-alert" role="status" aria-live="polite" hidden></div>
+            <button class="button button-quiet" id="end-inning" type="button">End inning</button>
           </div>
           <div class="diamond-wrap">
             <div class="diamond" id="diamond" aria-label="Baseball diamond">
@@ -189,9 +212,23 @@
         </div>
         <div class="scorecard-table-wrap">
           <table class="scorecard-table">
-            <thead><tr><th scope="col">#</th><th scope="col">Batter</th><th scope="col">Bases</th><th scope="col">Result</th></tr></thead>
+            <thead><tr><th scope="col">Edit</th><th scope="col">#</th><th scope="col">Batter</th><th scope="col">Bases</th><th scope="col">Result</th></tr></thead>
             <tbody id="inning-scorecard"></tbody>
           </table>
+        </div>
+        <div class="scorecard-edit-actions" id="scorecard-edit-actions" hidden aria-label="Edit selected scorecard plays">
+          <span class="helper">Select bases in the order reached. Home by itself records a home run; add Out after any bases reached.</span>
+          <div class="scorecard-route-buttons" aria-label="Bases reached, in order">
+            <button class="button button-quiet scorecard-route-base" id="scorecard-base-1" data-base="1" type="button" aria-pressed="false">Base 1</button>
+            <button class="button button-quiet scorecard-route-base" id="scorecard-base-2" data-base="2" type="button" aria-pressed="false">Base 2</button>
+            <button class="button button-quiet scorecard-route-base" id="scorecard-base-3" data-base="3" type="button" aria-pressed="false">Base 3</button>
+            <button class="button button-quiet scorecard-route-base" id="scorecard-home" data-base="4" type="button" aria-pressed="false">Home</button>
+          </div>
+          <span class="scorecard-route-preview" id="scorecard-route-preview" aria-live="polite">No bases selected</span>
+          <button class="button button-out scorecard-terminal" id="scorecard-out" data-terminal="out" type="button" aria-pressed="false">Out</button>
+          <button class="button button-quiet scorecard-terminal" id="scorecard-skip" data-terminal="skipped" type="button" aria-pressed="false">Skip</button>
+          <button class="button button-primary" id="save-scorecard-edit" type="button">Save changes</button>
+          <button class="button button-quiet" id="cancel-scorecard-edit" type="button">Cancel</button>
         </div>
       </section>
     </section>
@@ -235,16 +272,16 @@
     <div class="manual-content">
       <section>
         <h3>1. Set up a game</h3>
-        <p>Enter the date and optional ground or game name, choose the innings and hitter warning threshold, then enter both team names and each batting lineup (one player per line, in batting order). Press <strong>Save game setup</strong>. The game is saved in this browser on this device. On a phone, setup and batting order start collapsed after the game is saved. After expanding either section, it stays open while scrolling until you hide it or save a new game setup.</p>
+        <p>Enter the date and optional ground or game name, choose the innings and hitter warning threshold, then select a team from the static team list or choose <strong>New team</strong>. Selecting a listed team fills its name and players; add, rename, remove, or move players up and down before saving. During a game, names can be changed and players added, but existing players cannot be deleted or reordered; stable player IDs keep their scoring attached when renamed. Press <strong>Save game setup</strong>. The game is saved in this browser on this device. On a phone, setup and batting order start collapsed after the game is saved. After expanding either section, it stays open while scrolling until you hide it or save a new game setup.</p>
       </section>
       <section>
         <h3>2. Move players and record plays</h3>
-        <p>Choose the batting team and inning. Select the next batter using the player list or the <strong>Next up</strong> button, then choose a base on the diamond or one of the move buttons. Select an occupied base to choose its runner. Runners move forward in order automatically when needed. Choose <strong>Out</strong> to record an out, or <strong>Skip player</strong> for a player who will not bat. Use Undo or Redo to step through recent scoring actions.</p>
+        <p>Choose the batting team and inning. Select the next batter using the player list or the <strong>Next up</strong> button, then choose a base on the diamond or one of the move buttons. Select an occupied base to choose its runner. Runners move forward in order automatically when needed. Choose <strong>Out</strong> to record an out, or <strong>Skip player</strong> for a player who will not bat now. A skipped player can return later and their result stays in their original lineup spot. The inning button names the team and inning that will start next; use it to switch teams, then move to the next inning when both teams have finished. Warnings are displayed directly above the diamond. Use Undo or Redo to step through recent scoring actions.</p>
         <p>The score notation marks the bases reached. If a player passes more than one base in a move, the visited bases are connected and an arrow points to the base where the player stopped. A home run is shown as four connected base dots.</p>
       </section>
       <section>
         <h3>3. Read the scorecard</h3>
-        <p>The inning scorecard lists each batter, their base-by-base dots, and their result. The scoreboard at the top shows each team's running total. Use <strong>View scorecard</strong> to open the full-game scorecard with both teams, each inning, inning runs, and running totals.</p>
+        <p>The inning scorecard lists each batter, their base-by-base dots, and their result. Select one or more rows, then select bases in the order reached and press <strong>Save changes</strong>. For example, Base 1 then Base 3 records that route; Home by itself records a home run; Base 1 then Out records an out after reaching first. Edits are not applied until saved. Run circles are green and out circles are red. The scoreboard at the top shows each team's running total. Use <strong>View scorecard</strong> to open the full-game scorecard with both teams, each inning, inning runs, and running totals.</p>
       </section>
       <section>
         <h3>4. Export or share the scorecard</h3>

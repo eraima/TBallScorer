@@ -81,7 +81,14 @@ main { width: min(1160px, calc(100% - 36px)); margin: 28px auto 44px; }
 .team-setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
 .team-setup-card { padding: 16px; border: 1px solid #d6e8dc; border-radius: 12px; background: #f5fbf6; }
 .away-card { border-color: #e7e0cc; background: #fbfaf6; }
-.team-name-field { margin-bottom: 15px; }
+.team-name-field { margin-bottom: 10px; }
+.roster-editor { display: grid; max-height: 330px; gap: 7px; margin: 0; overflow-y: auto; padding: 0; list-style: none; }
+.roster-editor-item { display: grid; grid-template-columns: minmax(0, 1fr) 34px 34px auto; gap: 5px; align-items: center; }
+.roster-editor-item input, .add-player-row input { min-width: 0; min-height: 38px; border: 1px solid #cfddd3; border-radius: 8px; padding: 8px 10px; color: var(--ink); background: #fff; font-size: 13px; }
+.roster-editor-item .button { min-height: 34px; padding: 5px 7px; }
+.roster-order { width: 34px; }
+.roster-remove { min-height: 34px; padding: 5px 8px; }
+.roster-add { align-self: flex-start; margin-top: 8px; }
 .setup-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; }
 .setup-actions .helper { margin: 0; }
 
@@ -139,6 +146,10 @@ main { width: min(1160px, calc(100% - 36px)); margin: 28px auto 44px; }
 .inning-alert { padding: 12px 15px; border: 1px solid #e5d9aa; border-radius: 10px; color: #65541b; background: #fff9df; font-size: 13px; line-height: 1.5; }
 .inning-alert.complete { border-color: #b9dec6; color: #185638; background: #eaf7ee; }
 .inning-alert.warning { border-color: #edc6c1; color: #8b302b; background: #fff3f1; font-weight: 700; }
+.inning-alert-row { display: flex; align-items: stretch; flex-direction: column; gap: 10px; margin-top: 14px; }
+.inning-alert-row .inning-alert { width: 100%; }
+.inning-alert-row .inning-alert[hidden] { display: none; }
+.inning-alert-row #end-inning { align-self: flex-end; max-width: 100%; }
 
 .scoring-layout { display: grid; grid-template-columns: minmax(250px, .82fr) minmax(400px, 1.45fr); gap: 16px; align-items: stretch; }
 .lineup-panel, .diamond-panel, .inning-card { padding: 19px; }
@@ -164,10 +175,16 @@ main { width: min(1160px, calc(100% - 36px)); margin: 28px auto 44px; }
 .player-card.on-base { border-color: #d7c29a; background: #fffaf0; }
 .player-card.played { color: #76857e; }
 .player-number { display: grid; width: 25px; height: 25px; place-items: center; border-radius: 50%; color: var(--forest); background: #e9f3eb; font-size: 10px; font-weight: 800; }
-.player-name { overflow: hidden; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.player-name { width: 100%; min-width: 0; overflow: hidden; border: 0; border-radius: 5px; padding: 4px; color: inherit; background: transparent; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.player-name:focus { outline: 2px solid rgba(69,150,100,.32); }
 .player-status { color: var(--muted); font-size: 9px; font-weight: 600; text-align: right; }
 .player-card.selected .player-status { color: #287447; }
 .empty-lineup { padding: 15px; color: var(--muted); text-align: center; font-size: 12px; }
+.add-player-controls { display: grid; gap: 7px; margin-top: 12px; padding-top: 11px; border-top: 1px solid #edf1ed; }
+.add-player-controls .field { font-size: 11px; }
+.add-player-row { display: flex; gap: 7px; }
+.add-player-row input { flex: 1; }
+.add-player-controls .helper { margin: 0; line-height: 1.4; }
 .selected-player { max-width: 50%; overflow: hidden; color: #38704d; font-size: 11px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 
 .diamond-wrap { display: grid; min-height: 280px; place-items: center; overflow: hidden; }
@@ -247,6 +264,8 @@ main { width: min(1160px, calc(100% - 36px)); margin: 28px auto 44px; }
 .scorecard-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .scorecard-table th { padding: 9px 10px; color: var(--muted); background: #f6f9f6; font-size: 10px; letter-spacing: .07em; text-align: left; text-transform: uppercase; }
 .scorecard-table td { padding: 10px; border-bottom: 1px solid #edf1ed; vertical-align: middle; }
+.scorecard-table td:first-child, .scorecard-table th:first-child { width: 48px; text-align: center; }
+.scorecard-table input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--forest); }
 .scorecard-table tr:last-child td { border-bottom: 0; }
 .progress-dots { position: relative; width: 42px; aspect-ratio: 1; margin: 0 auto; border: 1px solid #89958c; }
 .progress-dots.inning-start { border-top: 3px solid #1c2d29; }
@@ -255,12 +274,17 @@ main { width: min(1160px, calc(100% - 36px)); margin: 28px auto 44px; }
 .dot-connection { position: absolute; z-index: 1; height: 1px; background: #1c2d29; transform-origin: left center; }
 .base-dot { position: absolute; z-index: 2; width: 6px; height: 6px; border-radius: 50%; background: #1c2d29; transform: translate(-50%, -50%); }
 .dot-arrow { position: absolute; z-index: 3; width: 0; height: 0; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-left: 7px solid #1c2d29; }
-.progress-dots.scored::after { border: 0; background: #1c2d29; }
-.progress-dots[data-out]::after { display: grid; place-items: center; border: 0; color: #1c2d29; content: attr(data-out); font-size: 9px; font-weight: 800; }
+.progress-dots.scored::after { border: 0; background: #25834a; }
+.progress-dots[data-out]::after { display: grid; place-items: center; border: 0; color: #fff; background: #bf4038; content: attr(data-out); font-size: 9px; font-weight: 800; }
 .result-tag { display: inline-block; padding: 4px 7px; border-radius: 99px; color: #45744e; background: #edf7ee; font-size: 10px; font-weight: 700; }
 .result-tag.out { color: #a6423b; background: #fff0ed; }
 .result-tag.run { color: #fff; background: var(--forest); }
 .result-tag.skipped { color: #5b625d; background: #eef0ee; }
+.scorecard-edit-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 12px; padding: 11px; border: 1px solid #d8e8dc; border-radius: 10px; background: #f6fbf7; }
+.scorecard-edit-actions .helper { width: 100%; }
+.scorecard-route-buttons { display: flex; flex-wrap: wrap; gap: 7px; }
+.scorecard-route-base.selected, .scorecard-terminal.selected { border-color: #73ae85; color: #185638; background: #e2f3e8; box-shadow: inset 0 0 0 1px #73ae85; }
+.scorecard-route-preview { min-width: 130px; padding: 7px 10px; border-radius: 7px; color: #385847; background: #eaf3eb; font-size: 12px; font-weight: 700; }
 .empty-scorecard { color: var(--muted); text-align: center; }
 .page-footer { width: min(1160px, calc(100% - 36px)); display: flex; justify-content: space-between; gap: 10px; margin: 0 auto 22px; color: #7c8c84; font-size: 10px; }
 
@@ -276,6 +300,7 @@ main { width: min(1160px, calc(100% - 36px)); margin: 28px auto 44px; }
   .game-settings { grid-template-columns: 1fr 1fr; }
   .game-settings .field:first-child { grid-column: 1 / -1; }
   .team-setup-grid { grid-template-columns: 1fr; gap: 11px; }
+  .roster-editor-item { grid-template-columns: minmax(0, 1fr) 30px 30px auto; }
   .scoreboard { padding: 17px; }
   .scoreboard-heading { align-items: flex-start; flex-direction: column; }
   .export-actions { width: 100%; }
