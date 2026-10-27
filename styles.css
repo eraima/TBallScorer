@@ -90,6 +90,7 @@ main { width: min(1160px, calc(100% - 36px)); margin: 28px auto 44px; }
 .roster-remove { min-height: 34px; padding: 5px 8px; }
 .roster-add { align-self: flex-start; margin-top: 8px; }
 .setup-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; }
+.qr-actions { display: flex; gap: 8px; }
 .setup-actions .helper { margin: 0; }
 
 .button { min-height: 40px; padding: 9px 15px; border: 1px solid transparent; border-radius: 9px; font-size: 12px; font-weight: 700; transition: transform .15s ease, background .15s ease; }

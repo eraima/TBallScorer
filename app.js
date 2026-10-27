@@ -68,7 +68,11 @@ const els = {
   confirmDialogTitle: document.querySelector("#confirm-dialog-title"),
   confirmDialogMessage: document.querySelector("#confirm-dialog-message"),
   cancelConfirm: document.querySelector("#cancel-confirm"),
-  acceptConfirm: document.querySelector("#accept-confirm")
+  acceptConfirm: document.querySelector("#accept-confirm"),
+  qrGenerateDialog: document.querySelector("#qr-generate-dialog"),
+  closeQrGenerate: document.querySelector("#close-qr-generate"),
+  qrScanDialog: document.querySelector("#qr-scan-dialog"),
+  closeQrScan: document.querySelector("#close-qr-scan")
 };
 
 let game = loadGame();
@@ -1659,6 +1663,123 @@ function showContextHelp(button) {
   openDialog(els.infoDialog);
 }
 
+function populateSetupFromQR(data) {
+  if (!data || typeof data !== "object") return;
+
+  els.gameName.value = data.n ?? "";
+  els.gameDate.value = data.d ?? "";
+  els.gameGround.value = data.g ?? "";
+  els.inningsCount.value = String(data.i ?? 12);
+  els.playersPerInning.value = String(data.p ?? 9);
+  els.outsPerInning.value = String(data.o ?? 3);
+
+  if (data.h) {
+    els.homeName.value = data.h.n ?? "Home Team";
+    setupRosters.home = data.h.p ?? [];
+    updateSetupLineup("home");
+  }
+
+  if (data.a) {
+    els.awayName.value = data.a.n ?? "Away Team";
+    setupRosters.away = data.a.p ?? [];
+    updateSetupLineup("away");
+  }
+}
+
+function generateQR() {
+  console.log("generateQR function called");
+  try {
+    const data = {
+      v: 1,
+      n: els.gameName.value.trim(),
+      d: els.gameDate.value,
+      g: els.gameGround.value.trim(),
+      i: Number(els.inningsCount.value),
+      p: Number(els.playersPerInning.value),
+      o: Number(els.outsPerInning.value),
+      h: {
+        n: els.homeName.value.trim(),
+        p: setupRosters.home
+      },
+      a: {
+        n: els.awayName.value.trim(),
+        p: setupRosters.away
+      }
+    };
+    console.log("Data collected for QR:", data);
+
+    const container = document.querySelector("#qr-code-container");
+    if (!container) {
+      console.error("QR container not found in DOM");
+      return;
+    }
+
+    container.innerHTML = "";
+    console.log("Attempting to instantiate QRCode...");
+
+    if (typeof QRCode === 'undefined') {
+      console.error("QRCode library is not loaded!");
+      showScoringMessage("QR library not loaded. Please refresh the page.");
+      return;
+    }
+
+    new QRCode(container, {
+      text: JSON.stringify(data),
+      width: 256,
+      height: 256,
+      colorDark: "#111",
+      colorLight: "#fff",
+      correctLevel: QRCode.CorrectLevel.L
+    });
+
+    console.log("QR code rendered successfully");
+    openDialog(els.qrGenerateDialog);
+  } catch (error) {
+    console.error("Error generating QR code:", error);
+    showScoringMessage("An error occurred while generating the QR code.");
+  }
+}
+
+function startScanner() {
+  console.log("startScanner function called");
+  openDialog(els.qrScanDialog);
+  const html5QrCode = new Html5Qrcode("qr-reader");
+
+  const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+  html5QrCode.start(
+    { facingMode: "environment" },
+    config,
+    (decodedText) => {
+      console.log("QR Code scanned successfully:", decodedText);
+      try {
+        const data = JSON.parse(decodedText);
+        console.log("Parsed QR data:", data);
+        populateSetupFromQR(data);
+        html5QrCode.stop().then(() => {
+          console.log("Scanner stopped after successful scan");
+          closeDialog(els.qrScanDialog);
+        });
+      } catch (e) {
+        console.error("Invalid QR data format:", e);
+        showScoringMessage("The QR code contains invalid data.");
+      }
+    },
+    (errorMessage) => {
+      // We don't log every frame's failure, but we can log occasionally
+      // or just leave it quiet as it's very noisy.
+    }
+  ).then(() => {
+    console.log("Camera started successfully");
+  }).catch(err => {
+    console.error("Camera error during start:", err);
+    showScoringMessage("Camera access denied or not available.");
+  });
+
+  // Store the scanner instance to stop it when dialog closes
+  els.activeScanner = html5QrCode;
+}
+
 function bindEvents() {
   els.startGame.addEventListener("click", saveSetup);
   els.homeTeamChoice.addEventListener("change", () => chooseSetupTeam("home", els.homeTeamChoice.value));
@@ -1687,10 +1808,16 @@ function bindEvents() {
     setupCollapsed = !setupCollapsed;
     render();
   });
+  els.toggleSetup.addEventListener("click", () => {
+    setupCollapsed = !setupCollapsed;
+    render();
+  });
   els.toggleLineup.addEventListener("click", () => {
     lineupCollapsed = !lineupCollapsed;
     render();
   });
+  document.querySelector("#generate-qr").addEventListener("click", generateQR);
+  document.querySelector("#scan-qr").addEventListener("click", startScanner);
   els.battingTeam.addEventListener("change", () => {
     selectedPlayerId = null;
     selectedScorecardPlayerIds.clear();
@@ -1727,6 +1854,20 @@ function bindEvents() {
   }
   els.exportJson.addEventListener("click", exportJson);
   els.exportImage.addEventListener("click", exportImage);
+  els.closeQrGenerate.addEventListener("click", () => closeDialog(els.qrGenerateDialog));
+  els.closeQrScan.addEventListener("click", () => {
+    if (els.activeScanner) {
+      els.activeScanner.stop().then(() => {
+        closeDialog(els.qrScanDialog);
+      }).catch(err => {
+        console.error("Error stopping scanner:", err);
+        closeDialog(els.qrScanDialog);
+      });
+      els.activeScanner = null;
+    } else {
+      closeDialog(els.qrScanDialog);
+    }
+  });
   for (const base of els.diamond.querySelectorAll(".base[data-base]")) {
     const handleBaseSelection = () => {
       const team = currentTeam();
