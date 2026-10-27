@@ -1808,10 +1808,6 @@ function bindEvents() {
     setupCollapsed = !setupCollapsed;
     render();
   });
-  els.toggleSetup.addEventListener("click", () => {
-    setupCollapsed = !setupCollapsed;
-    render();
-  });
   els.toggleLineup.addEventListener("click", () => {
     lineupCollapsed = !lineupCollapsed;
     render();
