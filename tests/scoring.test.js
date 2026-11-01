@@ -313,6 +313,22 @@ test("manual move combines a runner's automatic advance within the same batter's
   assert.equal(progress.children.filter(child => child.className === "dot-arrow")[0].title, "Stopped at Third");
 });
 
+test("manual movement after another batter's hit starts at the automatic movement base", () => {
+  const app = startApp();
+  app.moveNextBatterTo(1);
+  app.elements.get("diamond-next-player").click();
+  app.chooseMove("First");
+  app.selectPlayer(0);
+  app.chooseMove("Third");
+
+  const atBat = app.currentGame().teams[0].innings[1].atBats[0];
+  assert.deepEqual(atBat.advances, [{ from: 4, to: 1 }, { from: 1, to: 3 }]);
+  const progress = app.elements.get("inning-scorecard").children[0].children[3].children[0];
+  assert.equal(progress.children.filter(child => child.className === "dot-connection").length, 2);
+  assert.equal(progress.children.filter(child => child.className === "dot-arrow").length, 1);
+  assert.equal(progress.children.filter(child => child.className === "dot-arrow")[0].title, "Stopped at Third");
+});
+
 test("a new batter starts a new play for runner advance accumulation", () => {
   const game = createGame();
   game.teams[0].players.push({ id: "home-4", name: "Player 4", order: 4 });
@@ -567,6 +583,25 @@ test("skipping the next player advances the lineup without recording an out", ()
   assert.equal(app.elements.get("inning-scorecard").children[0].children[4].children[0].textContent, "Skipped");
 });
 
+test("skipped players do not count toward the configured hitter limit", () => {
+  const game = createGame();
+  game.playersPerInning = 2;
+  const app = startApp(game);
+
+  app.elements.get("diamond-next-player").click();
+  app.chooseMove("Skip player");
+  assert.doesNotMatch(app.elements.get("inning-alert").textContent, /Maximum of 2 hitters reached/);
+  assert.equal(app.elements.get("inning-summary").children[0].children[1].textContent, "0/2");
+
+  app.moveNextBatterTo(1);
+  assert.doesNotMatch(app.elements.get("inning-alert").textContent, /Maximum of 2 hitters reached/);
+  assert.equal(app.elements.get("inning-summary").children[0].children[1].textContent, "1/2");
+
+  app.moveNextBatterTo(4);
+  assert.match(app.elements.get("inning-alert").textContent, /Maximum of 2 hitters reached/);
+  assert.equal(app.elements.get("inning-summary").children[0].children[1].textContent, "2/2");
+});
+
 test("a skipped player can return after the lineup is complete without creating a second scorecard entry", () => {
   const app = startApp();
   app.elements.get("diamond-next-player").click();
@@ -740,11 +775,11 @@ test("Home alone records a home run, while first base followed by Out preserves 
 
 test("ending both half-innings advances to the next inning and resets to the first team", () => {
   const app = startApp();
-  assert.equal(app.elements.get("end-inning").textContent, "End Home inning → Start Away inning 1");
+  assert.equal(app.elements.get("end-inning").textContent, "Go to Away Innings 1 ->");
   app.elements.get("end-inning").click();
   assert.equal(app.elements.get("batting-team").value, "away");
   assert.equal(app.elements.get("inning-select").value, "1");
-  assert.equal(app.elements.get("end-inning").textContent, "End Away inning → Start Home inning 2");
+  assert.equal(app.elements.get("end-inning").textContent, "Go to Home Innings 2 ->");
   app.elements.get("end-inning").click();
   assert.equal(app.elements.get("batting-team").value, "home");
   assert.equal(app.elements.get("inning-select").value, "2");
@@ -757,13 +792,12 @@ test("the inning button names its next team and identifies the end of the final 
   game.teams[0].name = "Red Sox";
   game.teams[1].name = "Heatwaves";
   const app = startApp(game);
-  assert.equal(app.elements.get("end-inning").textContent, "End Red Sox inning → Start Heatwaves inning 1");
+  assert.equal(app.elements.get("end-inning").textContent, "Go to Heatwaves Innings 1 ->");
   app.setInning(2);
-  assert.equal(app.elements.get("end-inning").textContent, "End Red Sox inning → Start Heatwaves inning 2");
+  assert.equal(app.elements.get("end-inning").textContent, "Go to Heatwaves Innings 2 ->");
   app.elements.get("end-inning").click();
-  assert.equal(app.elements.get("end-inning").textContent, "End Heatwaves inning · Finish game");
+  assert.equal(app.elements.get("end-inning").textContent, "Game complete");
   app.elements.get("end-inning").click();
-  assert.equal(app.elements.get("end-inning").textContent, "Inning ended · Game complete");
 });
 
 test("ending both team innings draws the diagonal and top line for the next batter", () => {
@@ -791,14 +825,17 @@ test("ending both team innings draws the diagonal and top line for the next batt
   assert.equal(strokes.length, 4, "one diagonal and one top line per team");
 });
 
-test("warnings sit above the diamond and scorecard run/out circles use green/red", () => {
+test("warnings sit below the move choices and scorecard run/out circles use green/red", () => {
   const warningPosition = html.indexOf('id="inning-alert"');
   const diamondPanelPosition = html.indexOf('class="panel diamond-panel"');
   const diamondPosition = html.indexOf('<div class="diamond-wrap">');
-  assert.ok(warningPosition > diamondPanelPosition && warningPosition < diamondPosition);
+  const moveOptionsPosition = html.indexOf('id="player-move-options"');
+  assert.ok(warningPosition > moveOptionsPosition && warningPosition > diamondPosition);
   assert.match(css, /\.inning-alert-row\s*\{[^}]*flex-direction:\s*column/i);
   assert.match(css, /\.inning-alert-row\s+\.inning-alert\s*\{[^}]*width:\s*100%/i);
   assert.match(css, /\.inning-alert-row\s+#end-inning\s*\{[^}]*align-self:\s*flex-end/i);
+  assert.match(css, /\.inning-alert\.warning\s*\{[^}]*background:\s*#fff9df/i);
+  assert.match(css, /\.scoring-message\.instruction\s*\{[^}]*background:\s*#fff9df/i);
   assert.match(css, /\.progress-dots\.scored::after\s*\{[^}]*background:\s*#25834a/i);
   assert.match(css, /\.progress-dots\[data-out\]::after\s*\{[^}]*background:\s*#bf4038/i);
 });

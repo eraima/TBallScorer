@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=yes">
   <meta name="theme-color" content="#123c35">
   <title>T-ball Scorebook</title>
   <link rel="stylesheet" href="styles.css">
@@ -99,11 +99,16 @@
         </div>
         <div class="setup-actions">
           <p class="helper">Your game is saved automatically on this device.</p>
+          <button class="button button-quiet" id="swap-teams" type="button">Swap home / visiting</button>
           <div class="qr-actions">
             <button class="button button-quiet" id="generate-qr" type="button">Share QR</button>
             <button class="button button-quiet" id="scan-qr" type="button">Scan QR</button>
           </div>
-          <button class="button button-primary" id="start-game" type="button">Save game setup</button>
+          <div class="setup-save-actions">
+            <button class="button button-primary" id="start-game" type="button">Save game setup</button>
+            <button class="button button-primary" id="save-game" type="button" hidden>Save game</button>
+            <button class="button button-danger" id="restart-game" type="button" hidden>Save and restart</button>
+          </div>
         </div>
       </div>
     </section>
@@ -156,7 +161,7 @@
                 <input id="new-player-name" type="text" maxlength="60" placeholder="Player name">
                 <button class="button button-quiet" id="add-player" type="button">Add</button>
               </div>
-              <p class="helper">Players can be renamed or added during a game. Existing players cannot be deleted or reordered after scoring starts.</p>
+              <p class="helper">Players can be renamed, deleted, or reordered during a game. Scored-player deletion asks for confirmation before removing its score.</p>
             </div>
           </div>
         </section>
@@ -169,10 +174,6 @@
               <button class="info-button" type="button" data-help="Select a batter or runner, then choose a destination. The diagram and inning scorecard mark the bases reached; arrows show the endpoint of a multi-base run." aria-label="More information about moving players">i</button>
             </div>
             <span class="selected-player" id="selected-player">Select the next batter</span>
-          </div>
-          <div class="inning-alert-row">
-            <div id="inning-alert" class="inning-alert" role="status" aria-live="polite" hidden></div>
-            <button class="button button-quiet" id="end-inning" type="button">End inning</button>
           </div>
           <div class="diamond-wrap">
             <div class="diamond" id="diamond" aria-label="Baseball diamond">
@@ -198,6 +199,10 @@
           <p class="base-occupancy" id="base-occupancy" aria-live="polite"></p>
           <div class="player-move-options" id="player-move-options" aria-label="Move selected player" hidden></div>
           <p class="scoring-message" id="scoring-message" role="alert" aria-live="assertive" hidden></p>
+          <div class="inning-alert-row">
+            <div id="inning-alert" class="inning-alert" role="status" aria-live="polite" hidden></div>
+            <button class="button button-quiet" id="end-inning" type="button">Go to next innings -&gt;</button>
+          </div>
           <div class="diamond-footer">
             <p>Choose a move for the selected player. Runners advance in order; tap OUT to record an out or Skip player for an injured player.</p>
             <div class="scoring-actions">
@@ -236,6 +241,30 @@
           <button class="button button-primary" id="save-scorecard-edit" type="button">Save changes</button>
           <button class="button button-quiet" id="cancel-scorecard-edit" type="button">Cancel</button>
         </div>
+        <div class="umpire-details" aria-labelledby="umpire-details-title">
+          <div>
+            <p class="eyebrow">GAME OFFICIAL</p>
+            <h3 id="umpire-details-title">Umpire</h3>
+          </div>
+          <div class="umpire-fields">
+            <label class="field">
+              <span>Umpire number <span class="optional">(optional)</span></span>
+              <input id="umpire-number" type="text" inputmode="numeric" maxlength="20" placeholder="Number">
+            </label>
+            <label class="field">
+              <span>Umpire name <span class="optional">(optional)</span></span>
+              <input id="umpire-name" type="text" maxlength="60" placeholder="Name">
+            </label>
+          </div>
+          <div class="signature-field">
+            <span class="field-label">Signature <span class="optional">(optional)</span></span>
+            <canvas id="umpire-signature" class="signature-pad" width="600" height="180" aria-label="Sign here"></canvas>
+            <div class="signature-actions">
+              <span class="helper">Sign with a finger or stylus.</span>
+              <button class="button button-quiet" id="clear-umpire-signature" type="button">Clear signature</button>
+            </div>
+          </div>
+        </div>
       </section>
     </section>
   </main>
@@ -261,7 +290,6 @@
     <div class="info-dialog-heading">
       <h2 id="confirm-dialog-title">Confirm action</h2>
       <button class="button button-quiet" id="cancel-confirm" type="button">No, cancel</button>
-      <button class="button button-primary" id="accept-confirm" type="button">Yes, continue</button>
     </div>
     <p id="confirm-dialog-message"></p>
     <div class="confirm-dialog-actions">
@@ -277,11 +305,12 @@
     <div class="manual-content" style="max-height: calc(90vh - 100px); margin-top: 18px; overflow: auto;">
       <section>
         <h3>1. Set up a game</h3>
-        <p>Enter the date and optional ground or game name, choose the innings and hitter warning threshold, then select a team from the static team list or choose <strong>New team</strong>. Selecting a listed team fills its name and players; add, rename, remove, or move players up and down before saving. During a game, names can be changed and players added, but existing players cannot be deleted or reordered; stable player IDs keep their scoring attached when renamed. Press <strong>Save game setup</strong>.</p>
+        <p>Enter the date and optional ground or game name, choose the innings and hitter warning threshold, then select a team from the static team list or choose <strong>New team</strong>. New games start with 14 default players per team. Selecting a listed team fills its name and players; add, rename, remove, or move players up and down before saving. During a game, use <strong>Save game</strong> to keep scoring, or <strong>Save and restart</strong> to discard scoring after confirmation. Team sides can be swapped at any time; stable player IDs keep scoring attached when names or batting order change. Deleting a scored player asks for confirmation.</p>
       </section>
       <section>
         <h3>2. Move players and record plays</h3>
         <p>Choose the batting team and inning. Select the next batter using the player list or the <strong>Next up</strong> button, then choose a base, OUT, or Skip player. Select an occupied base to choose its runner. Runners move forward in order automatically when needed. Choose OUT to record an out, or Skip player for an injured player. A skipped player can return later and their result stays in their original lineup spot. The inning button names the team and inning that will start next; use it to switch teams, then move to the next inning when both teams have finished. Warnings are displayed directly above the diamond. Use Undo or Redo to step through recent scoring actions.</p>
+        <p>At the bottom of the inning scorecard, enter the umpire number and name if desired. The umpire can sign in the signature box using a finger or stylus; the details appear on the home team scorecard and are included in saved exports.</p>
         <p>The score notation marks the bases reached. If a player passes more than one base in a move, the visited bases are connected and an arrow points to the base where the player stopped. A home run is shown as four connected base dots.</p>
       </section>
       <section>

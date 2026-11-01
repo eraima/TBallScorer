@@ -102,6 +102,7 @@ main { width: min(1160px, calc(100% - 36px)); margin: 28px auto 44px; }
 .roster-remove { min-height: 34px; padding: 5px 8px; }
 .roster-add { align-self: flex-start; margin-top: 8px; }
 .setup-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; }
+.setup-save-actions { display: flex; gap: 8px; }
 .qr-actions { display: flex; gap: 8px; }
 .setup-actions .helper { margin: 0; }
 
@@ -131,7 +132,7 @@ main { width: min(1160px, calc(100% - 36px)); margin: 28px auto 44px; }
 .scorecard-preview-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .scorecard-preview-heading h2 { margin: 0; font: 800 21px "Manrope", sans-serif; letter-spacing: -.04em; }
 .scorecard-preview-hint { display: block; margin: 12px 0; }
-.scorecard-preview-scroll { max-height: calc(92vh - 125px); overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.scorecard-preview-scroll { max-height: calc(92vh - 125px); overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; touch-action: pan-x pan-y pinch-zoom; -webkit-overflow-scrolling: touch; }
 .scorecard-preview-canvas { display: block; width: 2542px; height: auto; max-width: none; }
 .manual-dialog { width: min(94vw, 760px); max-width: none; max-height: 90vh; padding: 22px; border: 1px solid var(--line); border-radius: 16px; color: var(--ink); background: var(--paper); box-shadow: 0 18px 70px rgba(10,35,28,.3); }
 .manual-dialog::backdrop { background: rgba(8,27,22,.68); }
@@ -158,7 +159,7 @@ main { width: min(1160px, calc(100% - 36px)); margin: 28px auto 44px; }
 .summary-stat strong { color: var(--forest); }
 .inning-alert { padding: 12px 15px; border: 1px solid #e5d9aa; border-radius: 10px; color: #65541b; background: #fff9df; font-size: 13px; line-height: 1.5; }
 .inning-alert.complete { border-color: #b9dec6; color: #185638; background: #eaf7ee; }
-.inning-alert.warning { border-color: #edc6c1; color: #8b302b; background: #fff3f1; font-weight: 700; }
+.inning-alert.warning { border-color: #e5d9aa; color: #65541b; background: #fff9df; font-weight: 700; }
 .inning-alert-row { display: flex; align-items: stretch; flex-direction: column; gap: 10px; margin-top: 14px; }
 .inning-alert-row .inning-alert { width: 100%; }
 .inning-alert-row .inning-alert[hidden] { display: none; }
@@ -264,6 +265,7 @@ main { width: min(1160px, calc(100% - 36px)); margin: 28px auto 44px; }
 .move-options-label { width: 100%; color: #385847; font-size: 12px; font-weight: 700; text-align: center; }
 .move-option { min-width: 72px; }
 .scoring-message { margin: 0 0 12px; padding: 10px 12px; border: 1px solid #edc6c1; border-radius: 9px; color: #8b302b; background: #fff3f1; font-size: 12px; font-weight: 600; line-height: 1.45; }
+.scoring-message.instruction { border-color: #e5d9aa; color: #65541b; background: #fff9df; }
 .scoring-message.success { border-color: #b9dec6; color: #185638; background: #eaf7ee; }
 .diamond-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 10px; border-top: 1px solid #edf1ed; }
 .diamond-footer p { max-width: 340px; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
@@ -277,6 +279,8 @@ main { width: min(1160px, calc(100% - 36px)); margin: 28px auto 44px; }
 .scorecard-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .scorecard-table th { padding: 9px 10px; color: var(--muted); background: #f6f9f6; font-size: 10px; letter-spacing: .07em; text-align: left; text-transform: uppercase; }
 .scorecard-table td { padding: 10px; border-bottom: 1px solid #edf1ed; vertical-align: middle; }
+.scorecard-inning-heading th { padding: 11px 10px 7px; color: var(--forest); background: #eaf3eb; font-size: 11px; letter-spacing: .02em; text-transform: none; }
+.scorecard-inning-summary td { padding: 9px 10px 12px; border-bottom: 2px solid #dce7df; color: #385847; background: #f5faf5; font-size: 11px; font-weight: 700; }
 .scorecard-table td:first-child, .scorecard-table th:first-child { width: 48px; text-align: center; }
 .scorecard-table input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--forest); }
 .scorecard-table tr:last-child td { border-bottom: 0; }
@@ -299,6 +303,13 @@ main { width: min(1160px, calc(100% - 36px)); margin: 28px auto 44px; }
 .scorecard-route-base.selected, .scorecard-terminal.selected { border-color: #73ae85; color: #185638; background: #e2f3e8; box-shadow: inset 0 0 0 1px #73ae85; }
 .scorecard-route-preview { min-width: 130px; padding: 7px 10px; border-radius: 7px; color: #385847; background: #eaf3eb; font-size: 12px; font-weight: 700; }
 .empty-scorecard { color: var(--muted); text-align: center; }
+.umpire-details { display: grid; gap: 14px; margin-top: 20px; padding: 16px; border: 1px solid #d8e8dc; border-radius: 12px; background: #f6fbf7; }
+.umpire-details h3 { margin: 0; font: 800 17px "Manrope", sans-serif; }
+.umpire-fields { display: grid; grid-template-columns: minmax(120px, .35fr) minmax(180px, 1fr); gap: 12px; }
+.signature-field { display: grid; gap: 7px; }
+.field-label { color: #374c45; font-size: 12px; font-weight: 700; }
+.signature-pad { display: block; width: min(100%, 600px); height: 150px; border: 1px solid #cfddd3; border-radius: 9px; background: #fff; cursor: crosshair; touch-action: none; }
+.signature-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .page-footer { width: min(1160px, calc(100% - 36px)); display: flex; justify-content: space-between; gap: 10px; margin: 0 auto 22px; color: #7c8c84; font-size: 10px; }
 
 @media (max-width: 760px) {
@@ -313,7 +324,7 @@ main { width: min(1160px, calc(100% - 36px)); margin: 28px auto 44px; }
   .game-settings { grid-template-columns: 1fr 1fr; }
   .game-settings .field:first-child { grid-column: 1 / -1; }
   .team-setup-grid { grid-template-columns: 1fr; gap: 11px; }
-  .roster-editor-item { grid-template-columns: minmax(0, 1fr) 30px 30px auto; }
+  .roster-editor-item { grid-template-columns: minmax(0, 1fr) auto; }
   .scoreboard { padding: 17px; }
   .scoreboard-heading { align-items: flex-start; flex-direction: column; }
   .export-actions { width: 100%; }
@@ -326,10 +337,14 @@ main { width: min(1160px, calc(100% - 36px)); margin: 28px auto 44px; }
   .game-controls { grid-template-columns: 1fr 1fr; padding: 14px; }
   .inning-summary { grid-column: 1 / -1; justify-content: flex-start; flex-wrap: wrap; }
   .lineup-toggle { display: inline-block; margin: 12px 0 0; }
-  .scoring-layout { grid-template-columns: 1fr; }
+  .scoring-layout { display: contents; }
   .lineup-panel { order: 1; }
-  .diamond-panel { order: 2; }
-  .inning-card { order: 3; }
+  .game-controls { order: 2; }
+  .diamond-panel { order: 3; }
+  .scoreboard { order: 4; }
+  .inning-card { order: 5; }
+  .umpire-fields { grid-template-columns: 1fr; }
+  .signature-actions { align-items: flex-start; flex-direction: column; }
   .diamond-wrap { min-height: 250px; }
   .diamond { width: min(78vw, 285px); }
   .page-footer { width: calc(100% - 24px); flex-direction: column; text-align: center; }
