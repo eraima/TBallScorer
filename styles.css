@@ -101,8 +101,8 @@ main { width: min(1160px, calc(100% - 36px)); margin: 28px auto 44px; }
 .roster-editor-item .button { min-height: 34px; padding: 5px 7px; }
 .roster-remove { min-height: 34px; padding: 5px 8px; }
 .roster-add { align-self: flex-start; margin-top: 8px; }
-.setup-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; }
-.setup-save-actions { display: flex; gap: 8px; }
+.setup-actions { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 12px; margin-top: 18px; }
+.setup-save-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .qr-actions { display: flex; gap: 8px; }
 .setup-actions .helper { margin: 0; }
 
@@ -159,7 +159,7 @@ main { width: min(1160px, calc(100% - 36px)); margin: 28px auto 44px; }
 .summary-stat strong { color: var(--forest); }
 .inning-alert { padding: 12px 15px; border: 1px solid #e5d9aa; border-radius: 10px; color: #65541b; background: #fff9df; font-size: 13px; line-height: 1.5; }
 .inning-alert.complete { border-color: #b9dec6; color: #185638; background: #eaf7ee; }
-.inning-alert.warning { border-color: #e5d9aa; color: #65541b; background: #fff9df; font-weight: 700; }
+.inning-alert.warning { border-color: #e1aaa5; color: #8f302b; background: #fff0ed; font-weight: 700; }
 .inning-alert-row { display: flex; align-items: stretch; flex-direction: column; gap: 10px; margin-top: 14px; }
 .inning-alert-row .inning-alert { width: 100%; }
 .inning-alert-row .inning-alert[hidden] { display: none; }
@@ -297,7 +297,8 @@ main { width: min(1160px, calc(100% - 36px)); margin: 28px auto 44px; }
 .result-tag.out { color: #a6423b; background: #fff0ed; }
 .result-tag.run { color: #fff; background: var(--forest); }
 .result-tag.skipped { color: #5b625d; background: #eef0ee; }
-.scorecard-edit-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 12px; padding: 11px; border: 1px solid #d8e8dc; border-radius: 10px; background: #f6fbf7; }
+.scorecard-edit-row td { padding: 0 10px 10px; border-bottom: 0; }
+.scorecard-edit-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding: 11px; border: 1px solid #d8e8dc; border-radius: 10px; background: #f6fbf7; }
 .scorecard-edit-actions .helper { width: 100%; }
 .scorecard-route-buttons { display: flex; flex-wrap: wrap; gap: 7px; }
 .scorecard-route-base.selected, .scorecard-terminal.selected { border-color: #73ae85; color: #185638; background: #e2f3e8; box-shadow: inset 0 0 0 1px #73ae85; }
@@ -321,6 +322,9 @@ main { width: min(1160px, calc(100% - 36px)); margin: 28px auto 44px; }
   .manual-button { margin-left: auto; padding-inline: 9px; }
   .save-state { width: 100%; max-width: none; margin: 0; font-size: 10px; text-align: right; }
   .setup-panel { padding: 17px; }
+  .setup-actions { display: flex; flex-wrap: wrap; }
+  .setup-actions .helper { flex: 1 1 100%; }
+  .setup-save-actions { flex: 1 1 100%; }
   .game-settings { grid-template-columns: 1fr 1fr; }
   .game-settings .field:first-child { grid-column: 1 / -1; }
   .team-setup-grid { grid-template-columns: 1fr; gap: 11px; }

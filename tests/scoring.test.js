@@ -275,10 +275,10 @@ test("a batter moved directly to second marks and connects first and second", ()
   assert.deepEqual(atBat.path, [2]);
   assert.deepEqual(atBat.advances, [{ from: 4, to: 2 }]);
   const progress = app.elements.get("inning-scorecard").children[0].children[3].children[0];
-  assert.equal(progress.children.filter(child => child.className === "base-dot").length, 3);
+  assert.equal(progress.children.filter(child => child.className === "base-dot").length, 2);
   assert.equal(progress.children.filter(child => child.className === "dot-connection").length, 2);
   assert.equal(progress.children.filter(child => child.className === "dot-arrow").length, 1);
-  assert.deepEqual(progress.children.filter(child => child.className === "base-dot").map(child => child.dataset.base), ["4", "1", "2"]);
+  assert.deepEqual(progress.children.filter(child => child.className === "base-dot").map(child => child.dataset.base), ["1", "2"]);
 });
 
 test("runner advances mark every base passed and point to the stopping base", () => {
@@ -291,10 +291,27 @@ test("runner advances mark every base passed and point to the stopping base", ()
   assert.deepEqual(atBat.path, [1, 3]);
   assert.deepEqual(atBat.advances, [{ from: 4, to: 3 }]);
   const progress = app.elements.get("inning-scorecard").children[0].children[3].children[0];
-  assert.equal(progress.children.filter(child => child.className === "base-dot").length, 4);
+  assert.equal(progress.children.filter(child => child.className === "base-dot").length, 3);
   assert.equal(progress.children.filter(child => child.className === "dot-connection").length, 3);
   assert.equal(progress.children.filter(child => child.className === "dot-arrow").length, 1);
-  assert.deepEqual(progress.children.filter(child => child.className === "base-dot").map(child => child.dataset.base), ["4", "1", "2", "3"]);
+  assert.deepEqual(progress.children.filter(child => child.className === "base-dot").map(child => child.dataset.base), ["1", "2", "3"]);
+});
+
+test("automatic and incoming routes both follow the base path", () => {
+  const app = startApp();
+  app.moveNextBatterTo(1);
+  app.elements.get("diamond-next-player").click();
+  app.chooseMove("Second");
+
+  const rows = app.elements.get("inning-scorecard").children;
+  const firstProgress = rows[0].children[3].children[0];
+  const secondProgress = rows[1].children[3].children[0];
+  assert.deepEqual(firstProgress.children
+    .filter(child => child.className === "dot-connection")
+    .map(child => child.style.left), ["86%", "50%"]);
+  assert.deepEqual(secondProgress.children
+    .filter(child => child.className === "dot-connection")
+    .map(child => child.style.left), ["50%", "86%"]);
 });
 
 test("manual move combines a runner's automatic advance within the same batter's play", () => {
@@ -355,6 +372,60 @@ test("a single-base advance adds a dot without connecting bases", () => {
   assert.equal(progress.children.filter(child => child.className === "base-dot").length, 2);
   assert.equal(progress.children.filter(child => child.className === "dot-connection").length, 0);
   assert.equal(progress.children.filter(child => child.className === "dot-arrow").length, 0);
+});
+
+test("a direct move to third dots first, second, and third and draws one direct arrow", () => {
+  const app = startApp();
+  app.moveNextBatterTo(3);
+
+  const progress = app.elements.get("inning-scorecard").children[0].children[3].children[0];
+  assert.deepEqual(progress.children
+    .filter(child => child.className === "base-dot")
+    .map(child => Number(child.dataset.base))
+    .sort(), [1, 2, 3]);
+  assert.equal(progress.children.filter(child => child.className === "dot-connection").length, 3);
+  assert.equal(progress.children.filter(child => child.className === "dot-arrow").length, 1);
+  assert.equal(progress.children.find(child => child.className === "dot-arrow").title, "Stopped at Third");
+});
+
+test("a direct move to second dots only first and second and draws the skipped-base line", () => {
+  const app = startApp();
+  app.moveNextBatterTo(2);
+
+  const progress = app.elements.get("inning-scorecard").children[0].children[3].children[0];
+  assert.deepEqual(progress.children
+    .filter(child => child.className === "base-dot")
+    .map(child => Number(child.dataset.base))
+    .sort(), [1, 2]);
+  assert.equal(progress.children.filter(child => child.className === "dot-connection").length, 2);
+  assert.equal(progress.children.filter(child => child.className === "dot-arrow").length, 1);
+});
+
+test("a scoring cycle stores start and end positions when the next batter gets out", () => {
+  const app = startApp();
+  app.moveNextBatterTo(1);
+  app.elements.get("diamond-out").click();
+
+  const half = app.currentGame().teams[0].innings[1];
+  assert.equal(half.scoringCycles.length, 2);
+  assert.deepEqual(half.scoringCycles[0].starts, { "home-1": 4 });
+  assert.deepEqual(half.scoringCycles[0].ends, { "home-1": 1 });
+  assert.deepEqual(half.scoringCycles[1].ends, { "home-1": 1, "home-2": null });
+});
+
+test("a later batter starts a new scoring cycle after closing the previous cycle", () => {
+  const app = startApp();
+  app.moveNextBatterTo(1);
+  app.elements.get("diamond-out").click();
+  app.moveNextBatterTo(3);
+
+  const half = app.currentGame().teams[0].innings[1];
+  assert.equal(half.scoringCycles.length, 3);
+  assert.deepEqual(half.scoringCycles.map(cycle => cycle.ends), [
+    { "home-1": 1 },
+    { "home-1": 1, "home-2": null },
+    { "home-1": 4, "home-3": 3 }
+  ]);
 });
 
 test("a home run shows four linked dots and an arrow at home", () => {
@@ -620,24 +691,76 @@ test("a skipped player can return after the lineup is complete without creating 
   assert.equal(half.runs, 2);
 });
 
-test("players can be renamed and added during a game without changing score identity", () => {
+test("players can be added during a game without changing score identity", () => {
   const app = startApp();
   app.moveNextBatterTo(1);
-  const playerName = app.elements.get("lineup-list").children[0].children[1];
-  playerName.value = "Renamed player";
-  app.change(playerName);
 
   const addName = app.elements.get("new-player-name");
   addName.value = "New player";
   app.elements.get("add-player").click();
 
   const team = app.currentGame().teams[0];
-  assert.equal(team.players[0].name, "Renamed player");
   assert.equal(team.players[0].id, "home-1");
   assert.equal(team.innings[1].atBats[0].playerId, "home-1");
   assert.equal(team.players[3].name, "New player");
   assert.equal(team.players[3].order, 4);
-  assert.equal(app.elements.get("inning-scorecard").children[0].children[2].textContent, "Renamed player");
+  assert.equal(app.elements.get("inning-scorecard").children[0].children[2].textContent, "Player 1");
+});
+
+test("scoring lineup player names are display-only", () => {
+  const app = startApp();
+  const playerName = app.elements.get("lineup-list").children[0].children[1];
+
+  assert.equal(playerName.tagName, undefined);
+  assert.equal(playerName.textContent, "Player 1");
+  assert.equal(playerName.listeners.get("change"), undefined);
+});
+
+test("setup name changes preserve scored player identity", () => {
+  const app = startApp();
+  app.moveNextBatterTo(1);
+
+  const setupName = app.elements.get("home-roster").children[0].children[0];
+  setupName.value = "Updated player";
+  app.change(setupName);
+  app.elements.get("save-game").click();
+
+  const team = app.currentGame().teams[0];
+  assert.equal(team.players[0].name, "Updated player");
+  assert.equal(team.innings[1].atBats[0].playerId, "home-1");
+  assert.equal(app.elements.get("inning-scorecard").children[0].children[2].textContent, "Updated player");
+});
+
+test("a player added during scoring survives a later setup save", () => {
+  const app = startApp();
+  app.moveNextBatterTo(1);
+
+  app.elements.get("new-player-name").value = "Replacement player";
+  app.elements.get("add-player").click();
+  app.elements.get("save-game").click();
+
+  const team = app.currentGame().teams[0];
+  assert.equal(team.players[3].name, "Replacement player");
+  assert.equal(team.innings[1].atBats[0].playerId, "home-1");
+});
+
+test("setup saves retain score identity when legacy setup IDs are missing", () => {
+  const game = createGame();
+  game.teams[0].innings[1] = {
+    atBats: [{ playerId: "home-1", path: [1], advances: [{ from: 4, to: 1 }], status: "onBase", base: 1 }],
+    outs: 0,
+    runs: 0
+  };
+  const app = startApp(game);
+
+  app.elements.get("home-roster").children[0].children[0].value = "Updated player";
+  app.change(app.elements.get("home-roster").children[0].children[0]);
+  app.elements.get("save-game").click();
+
+  const team = app.currentGame().teams[0];
+  assert.equal(team.players[0].id, "home-1");
+  assert.equal(team.players[0].name, "Updated player");
+  assert.notEqual(team.innings[1].atBats[0].playerId, "unknown");
 });
 
 test("setup rosters can be edited, removed, added, and reordered before saving", () => {
@@ -773,6 +896,23 @@ test("Home alone records a home run, while first base followed by Out preserves 
   assert.equal(outApp.currentGame().teams[0].innings[1].outs, 1);
 });
 
+test("editing first, third, and home marks every base on the route", () => {
+  const app = startApp();
+  app.moveNextBatterTo(1);
+  const checkbox = app.elements.get("inning-scorecard").children[0].children[0].children[0];
+  checkbox.checked = true;
+  app.change(checkbox);
+  app.elements.get("scorecard-base-1").click();
+  app.elements.get("scorecard-base-3").click();
+  app.elements.get("scorecard-home").click();
+  app.elements.get("save-scorecard-edit").click();
+
+  const progress = app.elements.get("inning-scorecard").children[0].children[3].children[0];
+  assert.deepEqual(progress.children.filter(child => child.className === "base-dot").map(child => Number(child.dataset.base)).sort(), [1, 2, 3, 4]);
+  assert.equal(progress.children.filter(child => child.className === "dot-connection").length, 2);
+  assert.equal(progress.children.filter(child => child.className === "dot-arrow").length, 1);
+});
+
 test("ending both half-innings advances to the next inning and resets to the first team", () => {
   const app = startApp();
   assert.equal(app.elements.get("end-inning").textContent, "Go to Away Innings 1 ->");
@@ -881,6 +1021,51 @@ test("a scoring notice remains visible when the final player completes the lineu
   assert.equal(app.elements.get("scoring-message").textContent, "Player 1, Player 2, Player 3 moved home and scored.");
   assert.ok(app.elements.get("scoring-message").classList.contains("success"));
   assert.equal(app.elements.get("diamond-next-player").disabled, true);
+});
+
+test("a scored player cannot be removed from the setup roster", () => {
+  const app = startApp();
+  app.moveNextBatterTo(1);
+
+  app.elements.get("home-roster").children[0].children[1].click();
+
+  assert.equal(app.currentGame().teams[0].players.length, 3);
+  assert.match(app.alerts.at(-1), /cannot be removed/i);
+
+  const firstName = app.elements.get("home-roster").children[0].children[0];
+  firstName.value = "";
+  app.change(firstName);
+  app.elements.get("save-game").click();
+  assert.equal(app.currentGame().teams[0].players.length, 3);
+  assert.match(app.alerts.at(-1), /cannot be removed/i);
+
+  firstName.value = "Renamed player";
+  app.change(firstName);
+  app.elements.get("save-game").click();
+  assert.equal(app.currentGame().teams[0].players[0].name, "Renamed player");
+});
+
+test("a player added after the lineup is complete bats before returning to player one", () => {
+  const app = startApp();
+  app.moveNextBatterTo(1);
+  app.moveNextBatterTo(2);
+  app.moveNextBatterTo(4);
+
+  app.elements.get("batting-team").value = "away";
+  app.change(app.elements.get("batting-team"));
+  app.elements.get("add-home-player").click();
+  const addedName = app.elements.get("home-roster").children.at(-1).children[0];
+  addedName.value = "Player 4";
+  app.change(addedName);
+  app.elements.get("save-game").click();
+  app.elements.get("batting-team").value = "home";
+  app.change(app.elements.get("batting-team"));
+
+  assert.equal(app.elements.get("next-batter-badge").textContent, "Up next: Player 4");
+  app.moveNextBatterTo(1);
+  const addedAtBat = app.currentGame().teams[0].innings[1].atBats[3];
+  const addedPlayer = app.currentGame().teams[0].players.find(player => player.id === addedAtBat.playerId);
+  assert.equal(addedPlayer.name, "Player 4");
 });
 
 test("earlier innings remain editable after scoring has started in a later inning", () => {
